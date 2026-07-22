@@ -3,12 +3,15 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { createClient, setRememberPreference } from "@/lib/supabase/client";
+import {
+  createClient,
+  saveTrustedDevicePreference,
+} from "@/lib/supabase/client";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
+  const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [message, setMessage] = useState<{
     type: "error" | "success";
     text: string;
@@ -33,10 +36,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
     try {
       if (mode === "login") {
-        setRememberPreference(rememberMe);
+        saveTrustedDevicePreference(keepSignedIn);
       }
 
-      const supabase = createClient(mode === "login" ? rememberMe : undefined);
+      const supabase = createClient(
+        mode === "login" ? keepSignedIn : undefined,
+      );
 
       if (mode === "register") {
         const redirectTo = `${window.location.origin}/auth/callback`;
@@ -81,7 +86,12 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       {mode === "register" && (
         <div className="field">
           <label>Full name</label>
-          <input className="input" name="fullName" required />
+          <input
+            className="input"
+            name="fullName"
+            autoComplete="name"
+            required
+          />
         </div>
       )}
 
@@ -108,34 +118,6 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         />
       </div>
 
-      {mode === "login" && (
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 10,
-            cursor: "pointer",
-            fontSize: 14,
-            lineHeight: 1.45,
-            color: "var(--muted, #756f67)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={rememberMe}
-            onChange={(event) => setRememberMe(event.target.checked)}
-            style={{ width: 18, height: 18, marginTop: 1, accentColor: "#1f2326" }}
-          />
-          <span>
-            <strong style={{ color: "var(--ink, #1f2326)" }}>
-              Keep me signed in on this device
-            </strong>
-            <br />
-            Use this only on a personal or trusted computer.
-          </span>
-        </label>
-      )}
-
       {mode === "register" && (
         <div className="field">
           <label>Confirm password</label>
@@ -150,6 +132,39 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </div>
       )}
 
+      {mode === "login" && (
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            cursor: "pointer",
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: "var(--muted, #756f67)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={keepSignedIn}
+            onChange={(event) => setKeepSignedIn(event.target.checked)}
+            style={{
+              width: 18,
+              height: 18,
+              marginTop: 2,
+              accentColor: "#1f2326",
+            }}
+          />
+          <span>
+            <strong style={{ color: "var(--ink, #1f2326)" }}>
+              Keep me signed in on this device
+            </strong>
+            <br />
+            Select this only on a personal or trusted computer.
+          </span>
+        </label>
+      )}
+
       {message && (
         <div
           className={`alert ${
@@ -161,7 +176,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       <button className="btn btn-primary" disabled={loading} type="submit">
-        {loading ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}
+        {loading
+          ? "Please wait…"
+          : mode === "login"
+            ? "Log in"
+            : "Create account"}
       </button>
 
       <p className="center muted">

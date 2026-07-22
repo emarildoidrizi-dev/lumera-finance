@@ -1,28 +1,34 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-const ONE_YEAR = 60 * 60 * 24 * 365;
-const REMEMBER_COOKIE = "lumera_remember_device";
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365;
+const TRUST_COOKIE = "lumera_trusted_device";
 
-function readRememberPreference(): boolean {
+function readTrustedDevicePreference(): boolean {
   if (typeof document === "undefined") return false;
+
   return document.cookie
     .split(";")
     .map((part) => part.trim())
-    .some((part) => part === `${REMEMBER_COOKIE}=1`);
+    .includes(`${TRUST_COOKIE}=1`);
 }
 
-export function setRememberPreference(remember: boolean) {
+export function saveTrustedDevicePreference(keepSignedIn: boolean): void {
   if (typeof document === "undefined") return;
 
-  if (remember) {
-    document.cookie = `${REMEMBER_COOKIE}=1; Path=/; Max-Age=${ONE_YEAR}; SameSite=Lax; Secure`;
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+
+  if (keepSignedIn) {
+    document.cookie =
+      `${TRUST_COOKIE}=1; Path=/; Max-Age=${ONE_YEAR_SECONDS}; ` +
+      `SameSite=Lax${secure}`;
   } else {
-    // Session cookie: removed automatically when the browser session ends.
-    document.cookie = `${REMEMBER_COOKIE}=0; Path=/; SameSite=Lax; Secure`;
+    // A cookie without Max-Age or Expires is a browser-session cookie.
+    document.cookie =
+      `${TRUST_COOKIE}=0; Path=/; SameSite=Lax${secure}`;
   }
 }
 
-export function createClient(rememberOverride?: boolean) {
+export function createClient(keepSignedInOverride?: boolean) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -30,14 +36,15 @@ export function createClient(rememberOverride?: boolean) {
     throw new Error("Missing Supabase environment variables.");
   }
 
-  const remember = rememberOverride ?? readRememberPreference();
+  const keepSignedIn =
+    keepSignedInOverride ?? readTrustedDevicePreference();
 
   return createBrowserClient(url, key, {
     cookieOptions: {
       path: "/",
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
-      ...(remember ? { maxAge: ONE_YEAR } : {}),
+      ...(keepSignedIn ? { maxAge: ONE_YEAR_SECONDS } : {}),
     },
   });
 }
