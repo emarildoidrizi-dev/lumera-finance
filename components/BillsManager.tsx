@@ -96,16 +96,6 @@ function effectiveStatus(bill: Bill): "pending" | "paid" | "cancelled" | "overdu
   return due < today ? "overdue" : "pending";
 }
 
-function nextDueDate(date: string, recurrence: Recurrence) {
-  const next = new Date(`${date}T12:00:00`);
-  if (recurrence === "weekly") next.setDate(next.getDate() + 7);
-  if (recurrence === "biweekly") next.setDate(next.getDate() + 14);
-  if (recurrence === "monthly") next.setMonth(next.getMonth() + 1);
-  if (recurrence === "quarterly") next.setMonth(next.getMonth() + 3);
-  if (recurrence === "semiannual") next.setMonth(next.getMonth() + 6);
-  if (recurrence === "yearly") next.setFullYear(next.getFullYear() + 1);
-  return next.toISOString().slice(0, 10);
-}
 
 async function convertToEur(amount: number, currency: string) {
   if (currency === "EUR") return { rate: 1, eur: amount };
@@ -144,6 +134,16 @@ export function BillsManager({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState(initialError);
+
+  useEffect(() => {
+    if (!message) return;
+
+    const timer = window.setTimeout(() => {
+      setMessage("");
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
+  }, [message]);
 
   useEffect(() => {
     const channel = supabase
@@ -308,7 +308,7 @@ export function BillsManager({
   }
 
   async function markPaid(bill: Bill) {
-    if (busy || bill.status === "paid") return;
+    if (busy || bill.status === "paid" || bill.transaction_id) return;
     setBusy(bill.id);
     setMessage("");
 
@@ -355,37 +355,6 @@ export function BillsManager({
         current.map((item) => (item.id === bill.id ? (updated as Bill) : item)),
       );
 
-      if (bill.recurrence !== "none") {
-        const { data: future, error: futureError } = await supabase
-          .from("bills")
-          .insert({
-            user_id: userId,
-            name: bill.name,
-            company: bill.company,
-            category: bill.category,
-            amount: Number(bill.amount),
-            currency: bill.currency,
-            amount_eur: Number(bill.amount_eur),
-            exchange_rate_to_eur: Number(bill.exchange_rate_to_eur),
-            due_date: nextDueDate(bill.due_date, bill.recurrence),
-            recurrence: bill.recurrence,
-            payment_method: bill.payment_method,
-            autopay: bill.autopay,
-            reminder_days: bill.reminder_days,
-            notes: bill.notes,
-            status: "pending",
-          })
-          .select()
-          .single();
-
-        if (futureError) throw futureError;
-        setBills((current) =>
-          current.some((item) => item.id === future.id)
-            ? current
-            : [...current, future as Bill],
-        );
-      }
-
       setMessage("Bill marked paid and added to Transactions.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The bill could not be marked paid.");
@@ -419,7 +388,7 @@ export function BillsManager({
       <div className={styles.actionRow}>
         <div>
           <h2>All bills</h2>
-          <p>Paid bills automatically become expense transactions.</p>
+          <p>Marking a bill paid records it once in Transactions without duplicating the bill.</p>
         </div>
         <button className={styles.primaryButton} onClick={() => setShowForm((value) => !value)}>
           {showForm ? <X size={18} /> : <Plus size={18} />}

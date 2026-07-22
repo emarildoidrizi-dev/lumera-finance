@@ -19,7 +19,6 @@ export default async function BillsPage() {
     <section>
       <div className="page-heading">
         <div>
-          <span className="eyebrow">SPRINT 3 · BILLS</span>
           <h1>Bills command center</h1>
           <p>
             Organize recurring obligations, upcoming payments and paid history
