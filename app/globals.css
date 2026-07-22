@@ -119,3 +119,41 @@ th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacin
   .topbar { align-items:flex-start; gap:14px; }
   .side-nav { grid-template-columns:1fr 1fr; }
 }
+
+/* Transaction management */
+.transactions-grid { grid-template-columns:minmax(440px,.92fr) minmax(620px,1.08fr); }
+.ledger-panel { min-width:0; }
+.transaction-row { transition:background .18s ease; }
+.transaction-row:hover { background:rgba(183,155,108,.055); }
+.transaction-description { font-weight:700; color:var(--ink); }
+.transaction-type { margin-top:4px; color:var(--muted); font-size:11px; text-transform:capitalize; }
+.actions-heading { text-align:right; }
+.transaction-actions { display:flex; justify-content:flex-end; gap:7px; opacity:.58; transition:opacity .18s ease; }
+.transaction-row:hover .transaction-actions,
+.transaction-actions:focus-within { opacity:1; }
+.icon-button { width:34px; height:34px; border:1px solid var(--line); border-radius:10px; background:var(--paper); color:var(--muted); display:grid; place-items:center; transition:all .18s ease; }
+.icon-button:hover { color:var(--ink); border-color:var(--gold); background:var(--gold-soft); transform:translateY(-1px); }
+.icon-button-danger:hover { color:var(--burgundy); border-color:rgba(146,91,91,.4); background:#f7e6e6; }
+.btn-danger { background:var(--burgundy); color:#fff; }
+.btn-danger:hover { filter:brightness(.94); }
+.form-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal-backdrop { position:fixed; inset:0; z-index:1000; display:grid; place-items:center; padding:24px; background:rgba(20,23,25,.58); backdrop-filter:blur(8px); }
+.modal-card { position:relative; width:min(620px,100%); max-height:calc(100vh - 48px); overflow:auto; background:var(--paper); border:1px solid rgba(255,255,255,.35); border-radius:26px; padding:32px; box-shadow:0 34px 100px rgba(0,0,0,.26); animation:modal-in .18s ease-out; }
+.modal-card-small { width:min(480px,100%); }
+.modal-card h3 { margin:10px 40px 12px 0; font-family:Georgia,"Times New Roman",serif; font-size:34px; letter-spacing:-.035em; font-weight:500; }
+.modal-copy { color:var(--muted); line-height:1.65; margin:0 0 22px; }
+.modal-close { position:absolute; top:20px; right:20px; width:36px; height:36px; display:grid; place-items:center; border:1px solid var(--line); border-radius:50%; background:transparent; color:var(--muted); }
+.modal-close:hover { color:var(--ink); background:var(--ivory); }
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:6px; }
+@keyframes modal-in { from { opacity:0; transform:translateY(8px) scale(.985); } to { opacity:1; transform:none; } }
+
+@media (max-width: 1180px) {
+  .transactions-grid { grid-template-columns:1fr; }
+}
+@media (max-width: 640px) {
+  .form-grid-2 { grid-template-columns:1fr; }
+  .modal-card { padding:26px 20px 20px; }
+  .modal-actions { flex-direction:column-reverse; }
+  .modal-actions .btn { width:100%; }
+  .transaction-actions { opacity:1; }
+}
