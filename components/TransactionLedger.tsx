@@ -129,8 +129,19 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       window.setTimeout(() => setNotice(""), 2600);
     }
 
+    function handleSaveFailed(event: Event) {
+      const failedId = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!failedId) return;
+      setTransactions((current) => current.filter((item) => item.id !== failedId));
+      setError("The transaction could not be saved. Please try again.");
+    }
+
     window.addEventListener("lumera:transaction-created", handleCreated);
-    return () => window.removeEventListener("lumera:transaction-created", handleCreated);
+    window.addEventListener("lumera:transaction-save-failed", handleSaveFailed);
+    return () => {
+      window.removeEventListener("lumera:transaction-created", handleCreated);
+      window.removeEventListener("lumera:transaction-save-failed", handleSaveFailed);
+    };
   }, []);
 
   useEffect(() => {
@@ -228,24 +239,6 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     return { inflow, outflow, net, neutralCount };
   }, [visible]);
 
-  const rowsWithBalance = useMemo(() => {
-    const chronological = [...visible].sort((a, b) =>
-      (a.occurred_at ?? `${a.transaction_date}T00:00:00Z`).localeCompare(
-        b.occurred_at ?? `${b.transaction_date}T00:00:00Z`,
-      ),
-    );
-    const balances = new Map<string, number>();
-    let running = 0;
-    chronological.forEach((item) => {
-      running += signedEuroValue(item);
-      balances.set(item.id, running);
-    });
-    return visible.map((item) => ({
-      ...item,
-      currency: item.currency || "EUR",
-      runningBalance: balances.get(item.id) ?? 0,
-    }));
-  }, [visible]);
 
   function clearFilters() {
     setSearch("");
@@ -257,8 +250,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
   }
 
   function exportCsv() {
-    const header = ["Description", "Category", "Occurred at", "Transaction type", "Direction", "Currency", "Original amount", "EUR amount", "Rate to EUR", "Rate date", "Running EUR balance"];
-    const rows = rowsWithBalance.map((item) => [
+    const header = ["Description", "Category", "Occurred at", "Transaction type", "Direction", "Currency", "Original amount", "EUR amount", "Rate to EUR", "Rate date"];
+    const rows = visible.map((item) => [
       item.description,
       item.category,
       item.occurred_at ?? item.transaction_date,
@@ -269,7 +262,6 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       Number(item.amount_eur ?? item.amount).toFixed(2),
       Number(item.exchange_rate_to_eur ?? 1).toFixed(8),
       item.exchange_rate_date ?? "",
-      item.runningBalance.toFixed(2),
     ]);
     const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -433,13 +425,12 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.list}>
-        {rowsWithBalance.map((transaction) => {
+        {visible.map((transaction) => {
           const direction = directionOf(transaction.type);
           return (
             <article className={styles.row} key={transaction.id}>
               <div className={direction === "inflow" ? styles.incomeMark : direction === "outflow" ? styles.expenseMark : styles.neutralMark} />
               <div className={styles.details}><strong>{transaction.description}</strong><span>{transaction.category} · {typeLabel(transaction.type)} · {readableDateTime(transaction.occurred_at, transaction.transaction_date)}</span></div>
-              <div className={styles.balanceBlock}><span>Running EUR balance</span><strong className={transaction.runningBalance >= 0 ? styles.positive : styles.negative}>{formatCurrency(transaction.runningBalance, "EUR")}</strong></div>
               <div className={styles.amountBlock}>
                 <strong className={direction === "inflow" ? styles.positive : direction === "outflow" ? styles.negative : ""}>{direction === "inflow" ? "+" : direction === "outflow" ? "-" : ""}{formatCurrency(Number(transaction.amount_eur ?? transaction.amount), "EUR")}</strong>
                 <span>{transaction.currency === "EUR" ? "Original currency EUR" : `${formatCurrency(Number(transaction.amount), transaction.currency)} · 1 ${transaction.currency} = ${Number(transaction.exchange_rate_to_eur).toFixed(6)} EUR`}</span>
