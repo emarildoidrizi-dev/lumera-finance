@@ -556,8 +556,27 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search description, category, type or currency" aria-label="Search transactions" />
         </label>
         <button className={styles.secondaryAction} type="button" onClick={clearFilters}><RotateCcw size={16} /> Reset</button>
-        <button className={styles.exportButton} type="button" onClick={exportCsv} disabled={!visible.length || loading}><Download size={16} /> Export CSV</button>
-        <button className={styles.exportButton} type="button" onClick={exportPdf} disabled={!visible.length || loading}><FileText size={16} /> {loading ? "Preparing PDF…" : "Export PDF"}</button>
+        <div className={styles.exportStack}>
+          <button
+            className={styles.exportButton}
+            type="button"
+            onClick={exportCsv}
+            disabled={!visible.length || loading}
+          >
+            <Download size={16} />
+            Export CSV
+          </button>
+
+          <button
+            className={styles.exportButton}
+            type="button"
+            onClick={exportPdf}
+            disabled={!visible.length || loading}
+          >
+            <FileText size={16} />
+            {loading ? "Preparing PDF…" : "Export PDF"}
+          </button>
+        </div>
       </div>
 
       <div className={`${styles.toolbar} ${styles.toolbarFive}`}>
