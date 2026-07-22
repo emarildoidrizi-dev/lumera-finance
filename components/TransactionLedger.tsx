@@ -417,10 +417,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
         <div><TrendingUp size={18} /><span>Money received</span><strong className={styles.positive}>{formatCurrency(totals.inflow, "EUR")}</strong></div>
         <div><TrendingDown size={18} /><span>Money spent</span><strong className={styles.negative}>{formatCurrency(totals.outflow, "EUR")}</strong></div>
         <div><WalletCards size={18} /><span>Net movement by currency</span><strong>{formatCurrency(totals.net, "EUR")}</strong></div>
-        <div><CalendarDays size={18} /><span>Transfers / adjustments</span><strong>{totals.neutralCount}</strong></div>
       </div>
 
-      <div className={styles.recordCount}>Showing {visible.length} of {transactions.length} {transactions.length === 1 ? "record" : "records"}</div>
       {notice && <div className={styles.notice}>{notice}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
