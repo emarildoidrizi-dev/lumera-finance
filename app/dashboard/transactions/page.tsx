@@ -6,7 +6,7 @@ export default async function TransactionsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("transactions")
-    .select("id,description,amount,type,category,transaction_date")
+    .select("id,description,amount,currency,type,category,transaction_date")
     .order("transaction_date", { ascending: false });
 
   return (

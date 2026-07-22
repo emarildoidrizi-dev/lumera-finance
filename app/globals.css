@@ -122,3 +122,5 @@ th { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacin
 
 /* Transactions Sprint 2 */
 .transactions-layout{display:grid;grid-template-columns:minmax(320px,.72fr) minmax(640px,1.45fr);gap:18px;align-items:start;margin-top:18px}.transaction-entry-panel{position:sticky;top:34px}.transaction-ledger-panel{min-width:0}.transaction-intro{margin:-5px 0 20px;font-size:14px;line-height:1.5}@media(max-width:1200px){.transactions-layout{grid-template-columns:1fr}.transaction-entry-panel{position:static}}
+
+.transaction-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.transaction-form-grid-amount{grid-template-columns:minmax(140px,.75fr) minmax(220px,1.25fr)}@media(max-width:700px){.transaction-form-grid,.transaction-form-grid-amount{grid-template-columns:1fr}}
