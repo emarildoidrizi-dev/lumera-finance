@@ -1,0 +1,1 @@
+export default function Page(){return <><header className="topbar"><div className="page-title"><h1>Bills</h1><p>This module is prepared for Sprint 2.</p></div></header><section className="panel"><div className="empty">The secure account foundation is live. We will connect this module to its own private database table next.</div></section></>}
