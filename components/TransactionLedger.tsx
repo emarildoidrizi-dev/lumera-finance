@@ -24,7 +24,7 @@ import {
   formatCurrency,
   type FlowDirection,
 } from "@/lib/financialOptions";
-import styles from "./TransactionLedger.module.css";
+import styles from "./TransactionLedgerRecovery.module.css";
 
 type Transaction = {
   id: string;
