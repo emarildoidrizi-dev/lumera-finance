@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   createClient,
@@ -9,7 +8,6 @@ import {
 } from "@/lib/supabase/client";
 
 export function AuthForm({ mode }: { mode: "login" | "register" }) {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(false);
   const [message, setMessage] = useState<{
@@ -23,7 +21,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     setMessage(null);
 
     const form = new FormData(event.currentTarget);
-    const email = String(form.get("email") ?? "").trim();
+    const email = String(form.get("username") ?? "").trim();
     const password = String(form.get("password") ?? "");
     const fullName = String(form.get("fullName") ?? "").trim();
     const confirmPassword = String(form.get("confirmPassword") ?? "");
@@ -60,6 +58,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           type: "success",
           text: "Account created. Check your email to confirm your address.",
         });
+        setLoading(false);
       } else {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -68,25 +67,30 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
         if (error) throw error;
 
-        router.replace("/dashboard");
-        router.refresh();
+        window.location.assign("/dashboard");
       }
     } catch (error) {
       setMessage({
         type: "error",
         text: error instanceof Error ? error.message : "Something went wrong.",
       });
-    } finally {
       setLoading(false);
     }
   }
 
   return (
-    <form className="form" onSubmit={submit}>
+    <form
+      className="form"
+      onSubmit={submit}
+      method="post"
+      action="/login"
+      autoComplete="on"
+    >
       {mode === "register" && (
         <div className="field">
-          <label>Full name</label>
+          <label htmlFor="full-name">Full name</label>
           <input
+            id="full-name"
             className="input"
             name="fullName"
             autoComplete="name"
@@ -96,19 +100,25 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       <div className="field">
-        <label>Email address</label>
+        <label htmlFor="lumera-username">Email address</label>
         <input
+          id="lumera-username"
           className="input"
-          name="email"
+          name="username"
           type="email"
-          autoComplete="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="username"
           required
         />
       </div>
 
       <div className="field">
-        <label>Password</label>
+        <label htmlFor="lumera-password">Password</label>
         <input
+          id="lumera-password"
           className="input"
           name="password"
           type="password"
@@ -120,8 +130,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
       {mode === "register" && (
         <div className="field">
-          <label>Confirm password</label>
+          <label htmlFor="confirm-password">Confirm password</label>
           <input
+            id="confirm-password"
             className="input"
             name="confirmPassword"
             type="password"
