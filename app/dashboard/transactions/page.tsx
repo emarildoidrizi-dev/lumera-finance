@@ -7,39 +7,30 @@ export default async function TransactionsPage() {
   const { data, error } = await supabase
     .from("transactions")
     .select("id,description,amount,type,category,transaction_date")
-    .order("transaction_date", { ascending: false })
-    .order("created_at", { ascending: false });
-
-  const transactions = (data ?? []).map((transaction) => ({
-    ...transaction,
-    type: transaction.type as "income" | "expense",
-  }));
+    .order("transaction_date", { ascending: false });
 
   return (
     <>
       <header className="topbar">
         <div className="page-title">
           <h1>Transactions</h1>
-          <p>Record and understand every movement of money.</p>
+          <p>Search, analyze and manage every movement of money.</p>
         </div>
       </header>
-      <section className="grid-2 transactions-grid">
-        <div className="panel">
+      <section className="transactions-layout">
+        <div className="panel transaction-entry-panel">
           <h3>Add transaction</h3>
+          <p className="muted transaction-intro">Record income and expenses as they happen.</p>
           <TransactionForm />
         </div>
-        <div className="panel ledger-panel">
+        <div className="panel transaction-ledger-panel">
           <div className="panel-head">
-            <h3>Your ledger</h3>
-            <span className="muted">
-              {transactions.length} {transactions.length === 1 ? "record" : "records"}
-            </span>
+            <div>
+              <h3>Your ledger</h3>
+              <p className="muted transaction-intro">Edit, filter, export and review your financial activity.</p>
+            </div>
           </div>
-          {error ? (
-            <div className="alert alert-error">Could not load transactions: {error.message}</div>
-          ) : (
-            <TransactionLedger transactions={transactions} />
-          )}
+          {error ? <div className="alert alert-error">{error.message}</div> : <TransactionLedger transactions={data ?? []} />}
         </div>
       </section>
     </>

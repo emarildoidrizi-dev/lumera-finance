@@ -1,7 +1,18 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { Pencil, Search, Trash2, X } from "lucide-react";
+import {
+  CalendarDays,
+  Download,
+  Pencil,
+  RotateCcw,
+  Search,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+  WalletCards,
+  X,
+} from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./TransactionLedger.module.css";
 
@@ -16,7 +27,7 @@ type Transaction = {
 
 type Props = { transactions: Transaction[] };
 type TypeFilter = "all" | "income" | "expense";
-type SortMode = "newest" | "oldest" | "highest" | "lowest";
+type SortMode = "newest" | "oldest" | "highest" | "lowest" | "description";
 
 const money = (value: number) =>
   new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
@@ -28,22 +39,31 @@ const readableDate = (value: string) =>
     year: "numeric",
   });
 
+const csvCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
+
 export function TransactionLedger({ transactions: initialTransactions }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [transactions, setTransactions] = useState(initialTransactions);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   const categories = useMemo(
     () => [...new Set(transactions.map((item) => item.category))].sort(),
     [transactions],
   );
+
+  const months = useMemo(() => {
+    const values = [...new Set(transactions.map((item) => item.transaction_date.slice(0, 7)))];
+    return values.sort((a, b) => b.localeCompare(a));
+  }, [transactions]);
 
   const visible = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -55,15 +75,17 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
           item.category.toLowerCase().includes(query);
         const matchesType = typeFilter === "all" || item.type === typeFilter;
         const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
-        return matchesSearch && matchesType && matchesCategory;
+        const matchesMonth = monthFilter === "all" || item.transaction_date.startsWith(monthFilter);
+        return matchesSearch && matchesType && matchesCategory && matchesMonth;
       })
       .sort((a, b) => {
         if (sortMode === "oldest") return a.transaction_date.localeCompare(b.transaction_date);
         if (sortMode === "highest") return Number(b.amount) - Number(a.amount);
         if (sortMode === "lowest") return Number(a.amount) - Number(b.amount);
+        if (sortMode === "description") return a.description.localeCompare(b.description);
         return b.transaction_date.localeCompare(a.transaction_date);
       });
-  }, [transactions, search, typeFilter, categoryFilter, sortMode]);
+  }, [transactions, search, typeFilter, categoryFilter, monthFilter, sortMode]);
 
   const totals = useMemo(() => {
     const income = visible
@@ -72,13 +94,61 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     const expenses = visible
       .filter((item) => item.type === "expense")
       .reduce((sum, item) => sum + Number(item.amount), 0);
-    return { income, expenses, net: income - expenses };
+    const net = income - expenses;
+    const average = visible.length
+      ? visible.reduce((sum, item) => sum + Number(item.amount), 0) / visible.length
+      : 0;
+    return { income, expenses, net, average };
   }, [visible]);
+
+  const rowsWithBalance = useMemo(() => {
+    const chronological = [...visible].sort((a, b) =>
+      a.transaction_date.localeCompare(b.transaction_date),
+    );
+    let running = 0;
+    const balances = new Map<string, number>();
+    chronological.forEach((item) => {
+      running += item.type === "income" ? Number(item.amount) : -Number(item.amount);
+      balances.set(item.id, running);
+    });
+    return visible.map((item) => ({ ...item, runningBalance: balances.get(item.id) ?? 0 }));
+  }, [visible]);
+
+  function clearFilters() {
+    setSearch("");
+    setTypeFilter("all");
+    setCategoryFilter("all");
+    setMonthFilter("all");
+    setSortMode("newest");
+  }
+
+  function exportCsv() {
+    const header = ["Description", "Category", "Date", "Type", "Amount", "Running balance"];
+    const rows = rowsWithBalance.map((item) => [
+      item.description,
+      item.category,
+      item.transaction_date,
+      item.type,
+      Number(item.amount).toFixed(2),
+      item.runningBalance.toFixed(2),
+    ]);
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `lumera-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    setNotice("CSV export downloaded.");
+    window.setTimeout(() => setNotice(""), 2600);
+  }
 
   async function deleteTransaction() {
     if (!deleteTarget) return;
     setLoading(true);
     setError("");
+    setNotice("");
 
     const { error: deleteError } = await supabase
       .from("transactions")
@@ -90,6 +160,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     } else {
       setTransactions((current) => current.filter((item) => item.id !== deleteTarget.id));
       setDeleteTarget(null);
+      setNotice("Transaction deleted.");
+      window.setTimeout(() => setNotice(""), 2600);
     }
     setLoading(false);
   }
@@ -99,6 +171,7 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     if (!editTarget) return;
     setLoading(true);
     setError("");
+    setNotice("");
 
     const form = new FormData(event.currentTarget);
     const update = {
@@ -121,6 +194,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     } else if (data) {
       setTransactions((current) => current.map((item) => (item.id === data.id ? data : item)));
       setEditTarget(null);
+      setNotice("Transaction updated.");
+      window.setTimeout(() => setNotice(""), 2600);
     }
     setLoading(false);
   }
@@ -129,16 +204,25 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
 
   return (
     <>
-      <div className={styles.toolbar}>
+      <div className={styles.toolbarTop}>
         <label className={styles.searchBox}>
           <Search size={17} aria-hidden="true" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search transactions"
+            placeholder="Search description or category"
             aria-label="Search transactions"
           />
         </label>
+        <button className={styles.secondaryAction} type="button" onClick={clearFilters}>
+          <RotateCcw size={16} /> Reset
+        </button>
+        <button className={styles.exportButton} type="button" onClick={exportCsv} disabled={!visible.length}>
+          <Download size={16} /> Export CSV
+        </button>
+      </div>
+
+      <div className={styles.toolbar}>
         <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}>
           <option value="all">All types</option>
           <option value="income">Income</option>
@@ -148,33 +232,50 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
           <option value="all">All categories</option>
           {categories.map((category) => <option key={category}>{category}</option>)}
         </select>
+        <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
+          <option value="all">All months</option>
+          {months.map((month) => (
+            <option key={month} value={month}>
+              {new Date(`${month}-01T00:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+            </option>
+          ))}
+        </select>
         <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
           <option value="newest">Newest first</option>
           <option value="oldest">Oldest first</option>
           <option value="highest">Highest amount</option>
           <option value="lowest">Lowest amount</option>
+          <option value="description">Description A–Z</option>
         </select>
       </div>
 
       <div className={styles.summary}>
-        <div><span>Income</span><strong className={styles.positive}>{money(totals.income)}</strong></div>
-        <div><span>Expenses</span><strong className={styles.negative}>{money(totals.expenses)}</strong></div>
-        <div><span>Net movement</span><strong className={totals.net >= 0 ? styles.positive : styles.negative}>{money(totals.net)}</strong></div>
+        <div><TrendingUp size={18} /><span>Filtered income</span><strong className={styles.positive}>{money(totals.income)}</strong></div>
+        <div><TrendingDown size={18} /><span>Filtered expenses</span><strong className={styles.negative}>{money(totals.expenses)}</strong></div>
+        <div><WalletCards size={18} /><span>Net movement</span><strong className={totals.net >= 0 ? styles.positive : styles.negative}>{money(totals.net)}</strong></div>
+        <div><CalendarDays size={18} /><span>Average transaction</span><strong>{money(totals.average)}</strong></div>
       </div>
 
       <div className={styles.recordCount}>
-        {visible.length} {visible.length === 1 ? "record" : "records"}
+        Showing {visible.length} of {transactions.length} {transactions.length === 1 ? "record" : "records"}
       </div>
 
+      {notice && <div className={styles.notice}>{notice}</div>}
       {error && <div className={styles.error}>{error}</div>}
 
       <div className={styles.list}>
-        {visible.map((transaction) => (
+        {rowsWithBalance.map((transaction) => (
           <article className={styles.row} key={transaction.id}>
             <div className={transaction.type === "income" ? styles.incomeMark : styles.expenseMark} />
             <div className={styles.details}>
               <strong>{transaction.description}</strong>
               <span>{transaction.category} · {readableDate(transaction.transaction_date)}</span>
+            </div>
+            <div className={styles.balanceBlock}>
+              <span>Running balance</span>
+              <strong className={transaction.runningBalance >= 0 ? styles.positive : styles.negative}>
+                {money(transaction.runningBalance)}
+              </strong>
             </div>
             <div className={styles.amountBlock}>
               <strong className={transaction.type === "income" ? styles.positive : styles.negative}>
