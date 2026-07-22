@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Download,
+  FileText,
   Pencil,
   RotateCcw,
   Search,
@@ -275,6 +276,164 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     window.setTimeout(() => setNotice(""), 2600);
   }
 
+
+  async function exportPdf() {
+    if (!visible.length) return;
+
+    setLoading(true);
+    setError("");
+
+    try {
+      const [{ jsPDF }, autoTableModule] = await Promise.all([
+        import("jspdf"),
+        import("jspdf-autotable"),
+      ]);
+      const autoTable = autoTableModule.default;
+
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const generatedAt = new Date().toLocaleString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text("Lumera Finance", 14, 16);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text("Transaction Report", 14, 23);
+      doc.setFontSize(8.5);
+      doc.text(`Generated: ${generatedAt}`, 14, 29);
+      doc.text(`Records included: ${visible.length}`, 14, 34);
+
+      const summaryY = 42;
+      const summary = [
+        ["Income", `EUR ${totals.inflow.toFixed(2)}`],
+        ["Expenses", `EUR ${totals.outflow.toFixed(2)}`],
+        ["Net movement", `EUR ${totals.net.toFixed(2)}`],
+      ];
+
+      autoTable(doc, {
+        startY: summaryY,
+        head: [["Summary", "Amount"]],
+        body: summary,
+        theme: "grid",
+        tableWidth: 78,
+        styles: {
+          font: "helvetica",
+          fontSize: 9,
+          cellPadding: 2.2,
+        },
+        headStyles: {
+          fillColor: [31, 35, 38],
+          textColor: [255, 255, 255],
+        },
+      });
+
+      const body = visible.map((item) => {
+        const direction = directionOf(item.type);
+        const directionLabel =
+          direction === "inflow"
+            ? "Income"
+            : direction === "outflow"
+              ? "Expense"
+              : "Adjustment";
+
+        const original = `${Number(item.amount).toFixed(2)} ${item.currency}`;
+        const euro = `EUR ${Number(item.amount_eur ?? item.amount).toFixed(2)}`;
+        const rate =
+          item.currency === "EUR"
+            ? "1.000000"
+            : Number(item.exchange_rate_to_eur ?? 1).toFixed(6);
+
+        return [
+          readableDateTime(item.occurred_at, item.transaction_date),
+          item.description,
+          item.category,
+          directionLabel,
+          original,
+          euro,
+          rate,
+        ];
+      });
+
+      autoTable(doc, {
+        startY: 42,
+        margin: { left: 98, right: 10 },
+        head: [[
+          "Date & time",
+          "Description",
+          "Category",
+          "Type",
+          "Original",
+          "EUR value",
+          "Rate",
+        ]],
+        body,
+        theme: "striped",
+        styles: {
+          font: "helvetica",
+          fontSize: 7.2,
+          cellPadding: 1.8,
+          overflow: "linebreak",
+          valign: "middle",
+        },
+        headStyles: {
+          fillColor: [31, 35, 38],
+          textColor: [255, 255, 255],
+          fontStyle: "bold",
+        },
+        alternateRowStyles: {
+          fillColor: [247, 244, 238],
+        },
+        columnStyles: {
+          0: { cellWidth: 34 },
+          1: { cellWidth: 42 },
+          2: { cellWidth: 31 },
+          3: { cellWidth: 18 },
+          4: { cellWidth: 24, halign: "right" },
+          5: { cellWidth: 24, halign: "right" },
+          6: { cellWidth: 18, halign: "right" },
+        },
+        didDrawPage: (data) => {
+          const pageCount = doc.getNumberOfPages();
+          doc.setFontSize(7.5);
+          doc.setTextColor(110);
+          doc.text(
+            `Lumera Finance · Page ${data.pageNumber} of ${pageCount}`,
+            14,
+            doc.internal.pageSize.getHeight() - 7,
+          );
+        },
+      });
+
+      doc.save(
+        `lumera-transactions-${new Date().toISOString().slice(0, 10)}.pdf`,
+      );
+
+      setNotice("PDF report downloaded.");
+      window.setTimeout(() => setNotice(""), 2600);
+    } catch (pdfError) {
+      setError(
+        pdfError instanceof Error
+          ? pdfError.message
+          : "The PDF could not be generated.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function openEdit(transaction: Transaction) {
     const isKnownCategory = CATEGORY_GROUPS.some((group) => group.items.includes(transaction.category));
     setEditCategory(isKnownCategory ? transaction.category : "Other / custom");
@@ -397,7 +556,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
           <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search description, category, type or currency" aria-label="Search transactions" />
         </label>
         <button className={styles.secondaryAction} type="button" onClick={clearFilters}><RotateCcw size={16} /> Reset</button>
-        <button className={styles.exportButton} type="button" onClick={exportCsv} disabled={!visible.length}><Download size={16} /> Export CSV</button>
+        <button className={styles.exportButton} type="button" onClick={exportCsv} disabled={!visible.length || loading}><Download size={16} /> Export CSV</button>
+        <button className={styles.exportButton} type="button" onClick={exportPdf} disabled={!visible.length || loading}><FileText size={16} /> {loading ? "Preparing PDF…" : "Export PDF"}</button>
       </div>
 
       <div className={`${styles.toolbar} ${styles.toolbarFive}`}>
