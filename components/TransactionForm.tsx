@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -9,6 +9,7 @@ import {
   TRANSACTION_TYPES,
   currencyName,
   currencySymbol,
+  formatCurrency,
 } from "@/lib/financialOptions";
 
 const groupedTypes = TRANSACTION_TYPES.reduce<Record<string, typeof TRANSACTION_TYPES>>(
@@ -20,13 +21,33 @@ const groupedTypes = TRANSACTION_TYPES.reduce<Record<string, typeof TRANSACTION_
   {},
 );
 
+function localDateTimeValue(date = new Date()) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+}
+
+type RateState = {
+  rate: number;
+  date: string;
+  source: string;
+};
+
 export function TransactionForm() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currency, setCurrency] = useState("EUR");
+  const [amount, setAmount] = useState("");
+  const [occurredAt, setOccurredAt] = useState(() => localDateTimeValue());
   const [category, setCategory] = useState("Groceries");
   const [customCategory, setCustomCategory] = useState("");
+  const [rate, setRate] = useState<RateState>({
+    rate: 1,
+    date: new Date().toISOString().slice(0, 10),
+    source: "identity",
+  });
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateError, setRateError] = useState("");
 
   const currencyOptions = useMemo(
     () =>
@@ -37,6 +58,47 @@ export function TransactionForm() {
       })).sort((a, b) => a.name.localeCompare(b.name)),
     [],
   );
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    if (currency === "EUR") {
+      setRate({
+        rate: 1,
+        date: new Date().toISOString().slice(0, 10),
+        source: "identity",
+      });
+      setRateError("");
+      setRateLoading(false);
+      return () => controller.abort();
+    }
+
+    async function loadRate() {
+      setRateLoading(true);
+      setRateError("");
+      try {
+        const response = await fetch(`/api/exchange-rate?from=${encodeURIComponent(currency)}&to=EUR`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to retrieve an exchange rate.");
+        setRate({ rate: Number(data.rate), date: data.date, source: data.source });
+      } catch (rateFetchError) {
+        if ((rateFetchError as Error).name !== "AbortError") {
+          setRateError((rateFetchError as Error).message);
+        }
+      } finally {
+        if (!controller.signal.aborted) setRateLoading(false);
+      }
+    }
+
+    void loadRate();
+    return () => controller.abort();
+  }, [currency]);
+
+  const numericAmount = Number(amount);
+  const euroAmount = Number.isFinite(numericAmount) && numericAmount > 0 ? numericAmount * rate.rate : 0;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,6 +117,12 @@ export function TransactionForm() {
       return;
     }
 
+    if (currency !== "EUR" && (rateLoading || rateError || !rate.rate)) {
+      setError("A valid EUR exchange rate is required before this transaction can be saved.");
+      setLoading(false);
+      return;
+    }
+
     const finalCategory = category === "Other / custom" ? customCategory.trim() : category;
     if (!finalCategory) {
       setError("Please enter a custom category.");
@@ -62,21 +130,49 @@ export function TransactionForm() {
       return;
     }
 
-    const { error: insertError } = await supabase.from("transactions").insert({
-      user_id: user.id,
-      description: String(form.get("description") ?? "").trim(),
-      amount: Number(form.get("amount")),
-      currency,
-      type: String(form.get("type")),
-      category: finalCategory,
-      transaction_date: String(form.get("date")),
-    });
+    const localInstant = new Date(occurredAt);
+    if (Number.isNaN(localInstant.getTime())) {
+      setError("Please choose a valid transaction date and time.");
+      setLoading(false);
+      return;
+    }
+
+    const originalAmount = Number(form.get("amount"));
+    const convertedAmount = Number((originalAmount * rate.rate).toFixed(6));
+
+    const { data: insertedTransaction, error: insertError } = await supabase
+      .from("transactions")
+      .insert({
+        user_id: user.id,
+        description: String(form.get("description") ?? "").trim(),
+        amount: originalAmount,
+        currency,
+        amount_eur: convertedAmount,
+        exchange_rate_to_eur: rate.rate,
+        exchange_rate_date: rate.date,
+        exchange_rate_source: rate.source,
+        type: String(form.get("type")),
+        category: finalCategory,
+        transaction_date: occurredAt.slice(0, 10),
+        occurred_at: localInstant.toISOString(),
+      })
+      .select(
+        "id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at",
+      )
+      .single();
 
     if (insertError) {
       setError(insertError.message);
-    } else {
+    } else if (insertedTransaction) {
+      window.dispatchEvent(
+        new CustomEvent("lumera:transaction-created", {
+          detail: insertedTransaction,
+        }),
+      );
       event.currentTarget.reset();
+      setAmount("");
       setCurrency("EUR");
+      setOccurredAt(localDateTimeValue());
       setCategory("Groceries");
       setCustomCategory("");
       router.refresh();
@@ -94,7 +190,16 @@ export function TransactionForm() {
       <div className="transaction-form-grid transaction-form-grid-amount">
         <div className="field">
           <label>Amount</label>
-          <input className="input" name="amount" type="number" min="0.01" step="0.01" required />
+          <input
+            className="input"
+            name="amount"
+            type="number"
+            min="0.01"
+            step="0.01"
+            required
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+          />
         </div>
         <div className="field">
           <label>Currency</label>
@@ -106,6 +211,26 @@ export function TransactionForm() {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="fx-preview" aria-live="polite">
+        {rateLoading ? (
+          <span>Retrieving the latest EUR reference rate…</span>
+        ) : rateError ? (
+          <span className="fx-preview-error">{rateError}</span>
+        ) : (
+          <>
+            <div>
+              <span>EUR equivalent</span>
+              <strong>{formatCurrency(euroAmount, "EUR")}</strong>
+            </div>
+            <small>
+              {currency === "EUR"
+                ? "No conversion required."
+                : `1 ${currency} = ${rate.rate.toFixed(6)} EUR · rate date ${rate.date}`}
+            </small>
+          </>
+        )}
       </div>
 
       <div className="field">
@@ -139,8 +264,15 @@ export function TransactionForm() {
           </select>
         </div>
         <div className="field">
-          <label>Date</label>
-          <input className="input" name="date" type="date" required />
+          <label>Exact date and time</label>
+          <input
+            className="input"
+            name="occurred_at"
+            type="datetime-local"
+            required
+            value={occurredAt}
+            onChange={(event) => setOccurredAt(event.target.value)}
+          />
         </div>
       </div>
 
@@ -159,8 +291,8 @@ export function TransactionForm() {
       )}
 
       {error && <div className="alert alert-error">{error}</div>}
-      <button className="btn btn-primary" disabled={loading}>
-        {loading ? "Saving…" : "Save transaction"}
+      <button className="btn btn-primary" disabled={loading || rateLoading || Boolean(rateError)}>
+        {loading ? "Saving…" : rateLoading ? "Retrieving rate…" : "Save transaction"}
       </button>
     </form>
   );

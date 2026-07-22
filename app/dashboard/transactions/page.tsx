@@ -6,8 +6,8 @@ export default async function TransactionsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("transactions")
-    .select("id,description,amount,currency,type,category,transaction_date")
-    .order("transaction_date", { ascending: false });
+    .select("id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at")
+    .order("occurred_at", { ascending: false });
 
   return (
     <>
