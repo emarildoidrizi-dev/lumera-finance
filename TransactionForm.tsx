@@ -100,81 +100,88 @@ export function TransactionForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (loading) return;
+
+    const formElement = event.currentTarget;
     setLoading(true);
     setError("");
 
-    const form = new FormData(event.currentTarget);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const form = new FormData(formElement);
+      const supabase = createClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setError("Please log in again.");
-      setLoading(false);
-      return;
-    }
+      if (userError || !user) {
+        throw new Error("Please log in again.");
+      }
 
-    if (currency !== "EUR" && (rateLoading || rateError || !rate.rate)) {
-      setError("A valid EUR exchange rate is required before this transaction can be saved.");
-      setLoading(false);
-      return;
-    }
+      if (currency !== "EUR" && (rateLoading || rateError || !rate.rate)) {
+        throw new Error("A valid EUR exchange rate is required before this transaction can be saved.");
+      }
 
-    const finalCategory = category === "Other / custom" ? customCategory.trim() : category;
-    if (!finalCategory) {
-      setError("Please enter a custom category.");
-      setLoading(false);
-      return;
-    }
+      const finalCategory = category === "Other / custom" ? customCategory.trim() : category;
+      if (!finalCategory) {
+        throw new Error("Please enter a custom category.");
+      }
 
-    const localInstant = new Date(occurredAt);
-    if (Number.isNaN(localInstant.getTime())) {
-      setError("Please choose a valid transaction date and time.");
-      setLoading(false);
-      return;
-    }
+      const localInstant = new Date(occurredAt);
+      if (Number.isNaN(localInstant.getTime())) {
+        throw new Error("Please choose a valid transaction date and time.");
+      }
 
-    const originalAmount = Number(form.get("amount"));
-    const convertedAmount = Number((originalAmount * rate.rate).toFixed(6));
+      const originalAmount = Number(form.get("amount"));
+      if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+        throw new Error("Please enter a valid amount greater than zero.");
+      }
 
-    const { data: insertedTransaction, error: insertError } = await supabase
-      .from("transactions")
-      .insert({
-        user_id: user.id,
-        description: String(form.get("description") ?? "").trim(),
-        amount: originalAmount,
-        currency,
-        amount_eur: convertedAmount,
-        exchange_rate_to_eur: rate.rate,
-        exchange_rate_date: rate.date,
-        exchange_rate_source: rate.source,
-        type: String(form.get("type")),
-        category: finalCategory,
-        transaction_date: occurredAt.slice(0, 10),
-        occurred_at: localInstant.toISOString(),
-      })
-      .select(
-        "id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at",
-      )
-      .single();
+      const convertedAmount = Number((originalAmount * rate.rate).toFixed(6));
 
-    if (insertError) {
-      setError(insertError.message);
-    } else if (insertedTransaction) {
+      const { data: insertedTransaction, error: insertError } = await supabase
+        .from("transactions")
+        .insert({
+          user_id: user.id,
+          description: String(form.get("description") ?? "").trim(),
+          amount: originalAmount,
+          currency,
+          amount_eur: convertedAmount,
+          exchange_rate_to_eur: rate.rate,
+          exchange_rate_date: rate.date,
+          exchange_rate_source: rate.source,
+          type: String(form.get("type")),
+          category: finalCategory,
+          transaction_date: occurredAt.slice(0, 10),
+          occurred_at: localInstant.toISOString(),
+        })
+        .select(
+          "id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at",
+        )
+        .single();
+
+      if (insertError) throw insertError;
+      if (!insertedTransaction) throw new Error("The transaction was saved, but Lumera did not receive the saved record.");
+
       window.dispatchEvent(
         new CustomEvent("lumera:transaction-created", {
           detail: insertedTransaction,
         }),
       );
-      event.currentTarget.reset();
+
+      formElement.reset();
       setAmount("");
       setCurrency("EUR");
       setOccurredAt(localDateTimeValue());
       setCategory("Groceries");
       setCustomCategory("");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to save this transaction.");
+    } finally {
+      // Always restore the button, even if a live-table event or UI reset fails.
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
