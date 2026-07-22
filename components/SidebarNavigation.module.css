@@ -1,0 +1,44 @@
+.link {
+  position: relative;
+  overflow: hidden;
+  transition: background-color 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.link:hover { transform: translateX(2px); }
+.pending { background: rgba(183, 155, 108, 0.16) !important; color: #fff !important; }
+.spinner {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  border-radius: 999px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: var(--gold);
+  animation: spin 650ms linear infinite;
+}
+.progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 3px;
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.progressVisible { opacity: 1; }
+.progress span {
+  display: block;
+  width: 38%;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, var(--gold), #e8d6b5, transparent);
+  animation: routeProgress 900ms ease-in-out infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes routeProgress {
+  0% { transform: translateX(-110%); }
+  55% { width: 48%; }
+  100% { transform: translateX(280%); width: 24%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .link, .progress { transition: none; }
+  .spinner, .progress span { animation: none; }
+}

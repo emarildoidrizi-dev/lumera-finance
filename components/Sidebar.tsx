@@ -1,7 +1,19 @@
+"use client";
+
 import Link from "next/link";
-import { LayoutDashboard, ArrowLeftRight, ReceiptText, ChartPie, Target, Landmark, LogOut } from "lucide-react";
+import {
+  ArrowLeftRight,
+  ChartPie,
+  Landmark,
+  LayoutDashboard,
+  ReceiptText,
+  Target,
+} from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { Brand } from "./Brand";
 import { SignOutButton } from "./SignOutButton";
+import styles from "./SidebarNavigation.module.css";
 
 const links = [
   ["/dashboard", LayoutDashboard, "Overview"],
@@ -13,5 +25,58 @@ const links = [
 ] as const;
 
 export function Sidebar() {
-  return <aside className="sidebar"><Brand href="/dashboard"/><nav className="side-nav">{links.map(([href,Icon,label])=><Link className="side-link" href={href} key={href}><Icon size={18}/>{label}</Link>)}<SignOutButton/></nav></aside>;
+  const pathname = usePathname();
+  const router = useRouter();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const routeHrefs = useMemo(() => links.map(([href]) => href), []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      routeHrefs.forEach((href) => router.prefetch(href));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [routeHrefs, router]);
+
+  useEffect(() => setPendingHref(null), [pathname]);
+
+  useEffect(() => {
+    if (!pendingHref) return;
+    const timer = window.setTimeout(() => setPendingHref(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [pendingHref]);
+
+  return (
+    <aside className="sidebar">
+      <Brand href="/dashboard" />
+      <nav className="side-nav" aria-label="Private finance navigation">
+        {links.map(([href, Icon, label]) => {
+          const isActive = href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+          const isPending = pendingHref === href;
+
+          return (
+            <Link
+              className={`side-link ${styles.link}${isActive ? " active" : ""}${isPending ? ` ${styles.pending}` : ""}`}
+              href={href}
+              key={href}
+              prefetch
+              aria-current={isActive ? "page" : undefined}
+              onPointerEnter={() => router.prefetch(href)}
+              onFocus={() => router.prefetch(href)}
+              onClick={() => {
+                if (!isActive) setPendingHref(href);
+              }}
+            >
+              <Icon size={18} aria-hidden="true" />
+              <span>{label}</span>
+              {isPending ? <span className={styles.spinner} aria-label="Opening page" /> : null}
+            </Link>
+          );
+        })}
+        <SignOutButton />
+      </nav>
+      <div className={`${styles.progress}${pendingHref ? ` ${styles.progressVisible}` : ""}`} aria-hidden="true">
+        <span />
+      </div>
+    </aside>
+  );
 }
