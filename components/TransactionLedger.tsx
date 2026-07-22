@@ -1,9 +1,9 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Pencil, Trash2, X } from "lucide-react";
+import { Pencil, Search, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import styles from "./TransactionLedger.module.css";
 
 type Transaction = {
   id: string;
@@ -14,24 +14,66 @@ type Transaction = {
   transaction_date: string;
 };
 
-type Props = {
-  transactions: Transaction[];
-};
+type Props = { transactions: Transaction[] };
+type TypeFilter = "all" | "income" | "expense";
+type SortMode = "newest" | "oldest" | "highest" | "lowest";
 
-function money(value: number) {
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR",
-  }).format(value);
-}
+const money = (value: number) =>
+  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(value);
 
-export function TransactionLedger({ transactions }: Props) {
-  const router = useRouter();
+const readableDate = (value: string) =>
+  new Date(`${value}T00:00:00`).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+export function TransactionLedger({ transactions: initialTransactions }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
+  const [transactions, setTransactions] = useState(initialTransactions);
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const categories = useMemo(
+    () => [...new Set(transactions.map((item) => item.category))].sort(),
+    [transactions],
+  );
+
+  const visible = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return transactions
+      .filter((item) => {
+        const matchesSearch =
+          !query ||
+          item.description.toLowerCase().includes(query) ||
+          item.category.toLowerCase().includes(query);
+        const matchesType = typeFilter === "all" || item.type === typeFilter;
+        const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+        return matchesSearch && matchesType && matchesCategory;
+      })
+      .sort((a, b) => {
+        if (sortMode === "oldest") return a.transaction_date.localeCompare(b.transaction_date);
+        if (sortMode === "highest") return Number(b.amount) - Number(a.amount);
+        if (sortMode === "lowest") return Number(a.amount) - Number(b.amount);
+        return b.transaction_date.localeCompare(a.transaction_date);
+      });
+  }, [transactions, search, typeFilter, categoryFilter, sortMode]);
+
+  const totals = useMemo(() => {
+    const income = visible
+      .filter((item) => item.type === "income")
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+    const expenses = visible
+      .filter((item) => item.type === "expense")
+      .reduce((sum, item) => sum + Number(item.amount), 0);
+    return { income, expenses, net: income - expenses };
+  }, [visible]);
 
   async function deleteTransaction() {
     if (!deleteTarget) return;
@@ -45,241 +87,151 @@ export function TransactionLedger({ transactions }: Props) {
 
     if (deleteError) {
       setError(deleteError.message);
-      setLoading(false);
-      return;
+    } else {
+      setTransactions((current) => current.filter((item) => item.id !== deleteTarget.id));
+      setDeleteTarget(null);
     }
-
-    setDeleteTarget(null);
     setLoading(false);
-    router.refresh();
   }
 
   async function updateTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editTarget) return;
-
     setLoading(true);
     setError("");
-    const form = new FormData(event.currentTarget);
 
-    const { error: updateError } = await supabase
+    const form = new FormData(event.currentTarget);
+    const update = {
+      description: String(form.get("description") ?? "").trim(),
+      amount: Number(form.get("amount")),
+      type: String(form.get("type")) as "income" | "expense",
+      category: String(form.get("category") ?? "").trim(),
+      transaction_date: String(form.get("date")),
+    };
+
+    const { data, error: updateError } = await supabase
       .from("transactions")
-      .update({
-        description: String(form.get("description") ?? "").trim(),
-        amount: Number(form.get("amount")),
-        type: String(form.get("type")),
-        category: String(form.get("category") ?? "").trim(),
-        transaction_date: String(form.get("date")),
-      })
-      .eq("id", editTarget.id);
+      .update(update)
+      .eq("id", editTarget.id)
+      .select("id,description,amount,type,category,transaction_date")
+      .single();
 
     if (updateError) {
       setError(updateError.message);
-      setLoading(false);
-      return;
+    } else if (data) {
+      setTransactions((current) => current.map((item) => (item.id === data.id ? data : item)));
+      setEditTarget(null);
     }
-
-    setEditTarget(null);
     setLoading(false);
-    router.refresh();
   }
 
-  if (!transactions.length) {
-    return <div className="empty">No transactions yet.</div>;
-  }
+  if (!transactions.length) return <div className={styles.empty}>No transactions yet.</div>;
 
   return (
     <>
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th>Category</th>
-              <th>Date</th>
-              <th>Amount</th>
-              <th className="actions-heading">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {transactions.map((transaction) => (
-              <tr className="transaction-row" key={transaction.id}>
-                <td>
-                  <div className="transaction-description">{transaction.description}</div>
-                  <div className="transaction-type">{transaction.type}</div>
-                </td>
-                <td>{transaction.category}</td>
-                <td>
-                  {new Date(`${transaction.transaction_date}T00:00:00`).toLocaleDateString(
-                    "en-GB",
-                  )}
-                </td>
-                <td
-                  className={
-                    transaction.type === "income" ? "amount-positive" : "amount-negative"
-                  }
-                >
-                  {transaction.type === "income" ? "+" : "-"}
-                  {money(Number(transaction.amount))}
-                </td>
-                <td>
-                  <div className="transaction-actions">
-                    <button
-                      className="icon-button"
-                      type="button"
-                      aria-label={`Edit ${transaction.description}`}
-                      title="Edit transaction"
-                      onClick={() => {
-                        setError("");
-                        setEditTarget(transaction);
-                      }}
-                    >
-                      <Pencil size={16} />
-                    </button>
-                    <button
-                      className="icon-button icon-button-danger"
-                      type="button"
-                      aria-label={`Delete ${transaction.description}`}
-                      title="Delete transaction"
-                      onClick={() => {
-                        setError("");
-                        setDeleteTarget(transaction);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className={styles.toolbar}>
+        <label className={styles.searchBox}>
+          <Search size={17} aria-hidden="true" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search transactions"
+            aria-label="Search transactions"
+          />
+        </label>
+        <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as TypeFilter)}>
+          <option value="all">All types</option>
+          <option value="income">Income</option>
+          <option value="expense">Expenses</option>
+        </select>
+        <select value={categoryFilter} onChange={(event) => setCategoryFilter(event.target.value)}>
+          <option value="all">All categories</option>
+          {categories.map((category) => <option key={category}>{category}</option>)}
+        </select>
+        <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)}>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="highest">Highest amount</option>
+          <option value="lowest">Lowest amount</option>
+        </select>
       </div>
 
-      {deleteTarget && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !loading && setDeleteTarget(null)}>
-          <div
-            className="modal-card modal-card-small"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-transaction-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              type="button"
-              aria-label="Close"
-              disabled={loading}
-              onClick={() => setDeleteTarget(null)}
-            >
-              <X size={18} />
-            </button>
-            <div className="eyebrow">Permanent action</div>
-            <h3 id="delete-transaction-title">Delete transaction?</h3>
-            <p className="modal-copy">
-              “{deleteTarget.description}” will be permanently removed from your ledger. This cannot
-              be undone.
-            </p>
-            {error && <div className="alert alert-error">{error}</div>}
-            <div className="modal-actions">
-              <button className="btn btn-soft" type="button" disabled={loading} onClick={() => setDeleteTarget(null)}>
-                Cancel
+      <div className={styles.summary}>
+        <div><span>Income</span><strong className={styles.positive}>{money(totals.income)}</strong></div>
+        <div><span>Expenses</span><strong className={styles.negative}>{money(totals.expenses)}</strong></div>
+        <div><span>Net movement</span><strong className={totals.net >= 0 ? styles.positive : styles.negative}>{money(totals.net)}</strong></div>
+      </div>
+
+      <div className={styles.recordCount}>
+        {visible.length} {visible.length === 1 ? "record" : "records"}
+      </div>
+
+      {error && <div className={styles.error}>{error}</div>}
+
+      <div className={styles.list}>
+        {visible.map((transaction) => (
+          <article className={styles.row} key={transaction.id}>
+            <div className={transaction.type === "income" ? styles.incomeMark : styles.expenseMark} />
+            <div className={styles.details}>
+              <strong>{transaction.description}</strong>
+              <span>{transaction.category} · {readableDate(transaction.transaction_date)}</span>
+            </div>
+            <div className={styles.amountBlock}>
+              <strong className={transaction.type === "income" ? styles.positive : styles.negative}>
+                {transaction.type === "income" ? "+" : "-"}{money(Number(transaction.amount))}
+              </strong>
+              <span>{transaction.type === "income" ? "Income" : "Expense"}</span>
+            </div>
+            <div className={styles.actions}>
+              <button type="button" onClick={() => { setError(""); setEditTarget(transaction); }} aria-label="Edit transaction">
+                <Pencil size={17} /><span>Edit</span>
               </button>
-              <button className="btn btn-danger" type="button" disabled={loading} onClick={deleteTransaction}>
-                {loading ? "Deleting…" : "Delete transaction"}
+              <button className={styles.deleteButton} type="button" onClick={() => { setError(""); setDeleteTarget(transaction); }} aria-label="Delete transaction">
+                <Trash2 size={17} /><span>Delete</span>
               </button>
             </div>
+          </article>
+        ))}
+      </div>
+
+      {!visible.length && <div className={styles.empty}>No transactions match your filters.</div>}
+
+      {editTarget && (
+        <div className={styles.backdrop} onMouseDown={() => !loading && setEditTarget(null)}>
+          <div className={styles.modal} onMouseDown={(event) => event.stopPropagation()} role="dialog" aria-modal="true">
+            <button className={styles.close} type="button" onClick={() => setEditTarget(null)}><X size={18} /></button>
+            <small>LEDGER ADJUSTMENT</small>
+            <h3>Edit transaction</h3>
+            <form onSubmit={updateTransaction}>
+              <label>Description<input name="description" defaultValue={editTarget.description} required /></label>
+              <div className={styles.formGrid}>
+                <label>Amount (€)<input name="amount" type="number" min="0.01" step="0.01" defaultValue={Number(editTarget.amount)} required /></label>
+                <label>Type<select name="type" defaultValue={editTarget.type}><option value="expense">Expense</option><option value="income">Income</option></select></label>
+                <label>Category<input name="category" defaultValue={editTarget.category} required /></label>
+                <label>Date<input name="date" type="date" defaultValue={editTarget.transaction_date} required /></label>
+              </div>
+              {error && <div className={styles.error}>{error}</div>}
+              <div className={styles.modalActions}>
+                <button type="button" onClick={() => setEditTarget(null)} disabled={loading}>Cancel</button>
+                <button className={styles.primaryButton} type="submit" disabled={loading}>{loading ? "Saving…" : "Save changes"}</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      {editTarget && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={() => !loading && setEditTarget(null)}>
-          <div
-            className="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="edit-transaction-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <button
-              className="modal-close"
-              type="button"
-              aria-label="Close"
-              disabled={loading}
-              onClick={() => setEditTarget(null)}
-            >
-              <X size={18} />
-            </button>
-            <div className="eyebrow">Ledger adjustment</div>
-            <h3 id="edit-transaction-title">Edit transaction</h3>
-            <form className="form" onSubmit={updateTransaction}>
-              <div className="field">
-                <label htmlFor="edit-description">Description</label>
-                <input
-                  id="edit-description"
-                  className="input"
-                  name="description"
-                  defaultValue={editTarget.description}
-                  maxLength={120}
-                  required
-                />
-              </div>
-              <div className="form-grid-2">
-                <div className="field">
-                  <label htmlFor="edit-amount">Amount (€)</label>
-                  <input
-                    id="edit-amount"
-                    className="input"
-                    name="amount"
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    defaultValue={Number(editTarget.amount)}
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="edit-type">Type</label>
-                  <select id="edit-type" className="input" name="type" defaultValue={editTarget.type}>
-                    <option value="expense">Expense</option>
-                    <option value="income">Income</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-grid-2">
-                <div className="field">
-                  <label htmlFor="edit-category">Category</label>
-                  <input
-                    id="edit-category"
-                    className="input"
-                    name="category"
-                    defaultValue={editTarget.category}
-                    required
-                  />
-                </div>
-                <div className="field">
-                  <label htmlFor="edit-date">Date</label>
-                  <input
-                    id="edit-date"
-                    className="input"
-                    name="date"
-                    type="date"
-                    defaultValue={editTarget.transaction_date}
-                    required
-                  />
-                </div>
-              </div>
-              {error && <div className="alert alert-error">{error}</div>}
-              <div className="modal-actions">
-                <button className="btn btn-soft" type="button" disabled={loading} onClick={() => setEditTarget(null)}>
-                  Cancel
-                </button>
-                <button className="btn btn-primary" type="submit" disabled={loading}>
-                  {loading ? "Saving…" : "Save changes"}
-                </button>
-              </div>
-            </form>
+      {deleteTarget && (
+        <div className={styles.backdrop} onMouseDown={() => !loading && setDeleteTarget(null)}>
+          <div className={`${styles.modal} ${styles.smallModal}`} onMouseDown={(event) => event.stopPropagation()} role="alertdialog" aria-modal="true">
+            <button className={styles.close} type="button" onClick={() => setDeleteTarget(null)}><X size={18} /></button>
+            <small>PERMANENT ACTION</small>
+            <h3>Delete transaction?</h3>
+            <p>“{deleteTarget.description}” will be permanently removed. This cannot be undone.</p>
+            {error && <div className={styles.error}>{error}</div>}
+            <div className={styles.modalActions}>
+              <button type="button" onClick={() => setDeleteTarget(null)} disabled={loading}>Cancel</button>
+              <button className={styles.dangerButton} type="button" onClick={deleteTransaction} disabled={loading}>{loading ? "Deleting…" : "Delete transaction"}</button>
+            </div>
           </div>
         </div>
       )}
