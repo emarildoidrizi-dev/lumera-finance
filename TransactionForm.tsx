@@ -138,35 +138,34 @@ export function TransactionForm() {
         throw new Error("Please enter a valid amount greater than zero.");
       }
 
-      const convertedAmount = Number((originalAmount * rate.rate).toFixed(6));
+      const description = String(form.get("description") ?? "").trim();
+      if (!description) {
+        throw new Error("Please enter a description.");
+      }
 
-      const { data: insertedTransaction, error: insertError } = await supabase
-        .from("transactions")
-        .insert({
-          user_id: user.id,
-          description: String(form.get("description") ?? "").trim(),
-          amount: originalAmount,
-          currency,
-          amount_eur: convertedAmount,
-          exchange_rate_to_eur: rate.rate,
-          exchange_rate_date: rate.date,
-          exchange_rate_source: rate.source,
-          type: String(form.get("type")),
-          category: finalCategory,
-          transaction_date: occurredAt.slice(0, 10),
-          occurred_at: localInstant.toISOString(),
-        })
-        .select(
-          "id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at",
-        )
-        .single();
+      const now = new Date().toISOString();
+      const optimisticTransaction = {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        description,
+        amount: originalAmount,
+        currency,
+        amount_eur: Number((originalAmount * rate.rate).toFixed(6)),
+        exchange_rate_to_eur: rate.rate,
+        exchange_rate_date: rate.date,
+        exchange_rate_source: rate.source,
+        type: String(form.get("type")),
+        category: finalCategory,
+        transaction_date: occurredAt.slice(0, 10),
+        occurred_at: localInstant.toISOString(),
+        created_at: now,
+      };
 
-      if (insertError) throw insertError;
-      if (!insertedTransaction) throw new Error("The transaction was saved, but Lumera did not receive the saved record.");
-
+      // Update the ledger and reset the form immediately. The database write
+      // continues in the background, so the button never remains stuck.
       window.dispatchEvent(
         new CustomEvent("lumera:transaction-created", {
-          detail: insertedTransaction,
+          detail: optimisticTransaction,
         }),
       );
 
@@ -176,10 +175,22 @@ export function TransactionForm() {
       setOccurredAt(localDateTimeValue());
       setCategory("Groceries");
       setCustomCategory("");
+      setLoading(false);
+
+      const { error: insertError } = await supabase
+        .from("transactions")
+        .insert(optimisticTransaction);
+
+      if (insertError) {
+        window.dispatchEvent(
+          new CustomEvent("lumera:transaction-save-failed", {
+            detail: { id: optimisticTransaction.id },
+          }),
+        );
+        throw insertError;
+      }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save this transaction.");
-    } finally {
-      // Always restore the button, even if a live-table event or UI reset fails.
       setLoading(false);
     }
   }

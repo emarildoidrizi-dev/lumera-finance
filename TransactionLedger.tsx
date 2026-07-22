@@ -129,9 +129,61 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       window.setTimeout(() => setNotice(""), 2600);
     }
 
+    function handleSaveFailed(event: Event) {
+      const failedId = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!failedId) return;
+      setTransactions((current) => current.filter((item) => item.id !== failedId));
+      setError("The transaction could not be saved. Please try again.");
+    }
+
     window.addEventListener("lumera:transaction-created", handleCreated);
-    return () => window.removeEventListener("lumera:transaction-created", handleCreated);
+    window.addEventListener("lumera:transaction-save-failed", handleSaveFailed);
+    return () => {
+      window.removeEventListener("lumera:transaction-created", handleCreated);
+      window.removeEventListener("lumera:transaction-save-failed", handleSaveFailed);
+    };
   }, []);
+
+  useEffect(() => {
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    async function subscribeToLiveTransactions() {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!mounted || !user) return;
+
+      channel = supabase
+        .channel(`transaction-ledger-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "transactions",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            setTransactions((current) => {
+              if (payload.eventType === "DELETE") {
+                const deletedId = (payload.old as { id?: string }).id;
+                return current.filter((item) => item.id !== deletedId);
+              }
+
+              const changed = payload.new as Transaction;
+              if (!changed?.id) return current;
+              return [changed, ...current.filter((item) => item.id !== changed.id)];
+            });
+          },
+        )
+        .subscribe();
+    }
+
+    void subscribeToLiveTransactions();
+    return () => {
+      mounted = false;
+      if (channel) void supabase.removeChannel(channel);
+    };
+  }, [supabase]);
 
   const categories = useMemo(
     () => [...new Set(transactions.map((item) => item.category))].sort(),
