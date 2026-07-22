@@ -1,1 +1,38 @@
-export default function Page(){return <><header className="topbar"><div className="page-title"><h1>Bills</h1><p>This module is prepared for Sprint 2.</p></div></header><section className="panel"><div className="empty">The secure account foundation is live. We will connect this module to its own private database table next.</div></section></>}
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { BillsManager } from "@/components/BillsManager";
+
+export default async function BillsPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const { data: bills, error } = await supabase
+    .from("bills")
+    .select("*")
+    .order("due_date", { ascending: true });
+
+  return (
+    <section>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">SPRINT 3 · BILLS</span>
+          <h1>Bills command center</h1>
+          <p>
+            Organize recurring obligations, upcoming payments and paid history
+            in one private workspace.
+          </p>
+        </div>
+      </div>
+
+      <BillsManager
+        userId={user.id}
+        initialBills={bills ?? []}
+        initialError={error?.message ?? ""}
+      />
+    </section>
+  );
+}
