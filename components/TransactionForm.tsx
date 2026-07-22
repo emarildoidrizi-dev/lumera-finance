@@ -1,7 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   CATEGORY_GROUPS,
@@ -33,12 +32,12 @@ type RateState = {
 };
 
 export function TransactionForm() {
-  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [currency, setCurrency] = useState("EUR");
   const [amount, setAmount] = useState("");
   const [occurredAt, setOccurredAt] = useState(() => localDateTimeValue());
+  const transactionTimeWasEdited = useRef(false);
   const [category, setCategory] = useState("Groceries");
   const [customCategory, setCustomCategory] = useState("");
   const [rate, setRate] = useState<RateState>({
@@ -58,6 +57,17 @@ export function TransactionForm() {
       })).sort((a, b) => a.name.localeCompare(b.name)),
     [],
   );
+
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (!transactionTimeWasEdited.current) {
+        setOccurredAt(localDateTimeValue());
+      }
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,52 +112,57 @@ export function TransactionForm() {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (loading) return;
+
+    const formElement = event.currentTarget;
     setLoading(true);
     setError("");
 
-    const form = new FormData(event.currentTarget);
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    try {
+      const form = new FormData(formElement);
+      const supabase = createClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    if (!user) {
-      setError("Please log in again.");
-      setLoading(false);
-      return;
-    }
+      if (userError || !user) {
+        throw new Error("Please log in again.");
+      }
 
-    if (currency !== "EUR" && (rateLoading || rateError || !rate.rate)) {
-      setError("A valid EUR exchange rate is required before this transaction can be saved.");
-      setLoading(false);
-      return;
-    }
+      if (currency !== "EUR" && (rateLoading || rateError || !rate.rate)) {
+        throw new Error("A valid EUR exchange rate is required before this transaction can be saved.");
+      }
 
-    const finalCategory = category === "Other / custom" ? customCategory.trim() : category;
-    if (!finalCategory) {
-      setError("Please enter a custom category.");
-      setLoading(false);
-      return;
-    }
+      const finalCategory = category === "Other / custom" ? customCategory.trim() : category;
+      if (!finalCategory) {
+        throw new Error("Please enter a custom category.");
+      }
 
-    const localInstant = new Date(occurredAt);
-    if (Number.isNaN(localInstant.getTime())) {
-      setError("Please choose a valid transaction date and time.");
-      setLoading(false);
-      return;
-    }
+      const localInstant = new Date(occurredAt);
+      if (Number.isNaN(localInstant.getTime())) {
+        throw new Error("Please choose a valid transaction date and time.");
+      }
 
-    const originalAmount = Number(form.get("amount"));
-    const convertedAmount = Number((originalAmount * rate.rate).toFixed(6));
+      const originalAmount = Number(form.get("amount"));
+      if (!Number.isFinite(originalAmount) || originalAmount <= 0) {
+        throw new Error("Please enter a valid amount greater than zero.");
+      }
 
-    const { data: insertedTransaction, error: insertError } = await supabase
-      .from("transactions")
-      .insert({
+      const description = String(form.get("description") ?? "").trim();
+      if (!description) {
+        throw new Error("Please enter a description.");
+      }
+
+      const now = new Date().toISOString();
+      const optimisticTransaction = {
+        id: crypto.randomUUID(),
         user_id: user.id,
-        description: String(form.get("description") ?? "").trim(),
+        description,
         amount: originalAmount,
         currency,
-        amount_eur: convertedAmount,
+        amount_eur: Number((originalAmount * rate.rate).toFixed(6)),
         exchange_rate_to_eur: rate.rate,
         exchange_rate_date: rate.date,
         exchange_rate_source: rate.source,
@@ -155,29 +170,42 @@ export function TransactionForm() {
         category: finalCategory,
         transaction_date: occurredAt.slice(0, 10),
         occurred_at: localInstant.toISOString(),
-      })
-      .select(
-        "id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at",
-      )
-      .single();
+        created_at: now,
+      };
 
-    if (insertError) {
-      setError(insertError.message);
-    } else if (insertedTransaction) {
+      // Update the ledger and reset the form immediately. The database write
+      // continues in the background, so the button never remains stuck.
       window.dispatchEvent(
         new CustomEvent("lumera:transaction-created", {
-          detail: insertedTransaction,
+          detail: optimisticTransaction,
         }),
       );
-      event.currentTarget.reset();
+
+      formElement.reset();
       setAmount("");
       setCurrency("EUR");
+      transactionTimeWasEdited.current = false;
       setOccurredAt(localDateTimeValue());
       setCategory("Groceries");
       setCustomCategory("");
-      router.refresh();
+      setLoading(false);
+
+      const { error: insertError } = await supabase
+        .from("transactions")
+        .insert(optimisticTransaction);
+
+      if (insertError) {
+        window.dispatchEvent(
+          new CustomEvent("lumera:transaction-save-failed", {
+            detail: { id: optimisticTransaction.id },
+          }),
+        );
+        throw insertError;
+      }
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Unable to save this transaction.");
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
@@ -271,7 +299,10 @@ export function TransactionForm() {
             type="datetime-local"
             required
             value={occurredAt}
-            onChange={(event) => setOccurredAt(event.target.value)}
+            onChange={(event) => {
+              transactionTimeWasEdited.current = true;
+              setOccurredAt(event.target.value);
+            }}
           />
         </div>
       </div>
