@@ -290,7 +290,6 @@ export function BillsManager({
         autopay: form.autopay,
         reminder_days: Number(form.reminder_days),
         notes: form.notes.trim() || null,
-        status: "pending" as BillStatus,
         updated_at: new Date().toISOString(),
       };
 
@@ -309,7 +308,7 @@ export function BillsManager({
       } else {
         const { data, error } = await supabase
           .from("bills")
-          .insert(payload)
+          .insert({ ...payload, status: "pending" as BillStatus })
           .select()
           .single();
         if (error) throw error;
@@ -331,57 +330,44 @@ export function BillsManager({
   }
 
   async function markPaid(bill: Bill) {
-    if (busy || bill.status === "paid" || bill.transaction_id) return;
-    setBusy(bill.id);
+    if (busy || bill.status === "paid") return;
+
+    setBusy(`paid-${bill.id}`);
     setMessage("");
 
     try {
       const paidAt = new Date().toISOString();
+      const paidDate = paidAt.slice(0, 10);
 
-      const { data: transaction, error: transactionError } = await supabase
-        .from("transactions")
-        .insert({
-          user_id: userId,
-          description: bill.company ? `${bill.name} · ${bill.company}` : bill.name,
-          amount: Number(bill.amount),
-          currency: bill.currency,
-          amount_eur: Number(bill.amount_eur),
-          exchange_rate_to_eur: Number(bill.exchange_rate_to_eur),
-          exchange_rate_date: new Date().toISOString().slice(0, 10),
-          exchange_rate_source: "Bill conversion",
-          type: "expense",
-          category: bill.category,
-          transaction_date: new Date().toISOString().slice(0, 10),
-          occurred_at: paidAt,
-        })
-        .select("id")
-        .single();
-
-      if (transactionError) throw transactionError;
-
-      const { data: updated, error } = await supabase
-        .from("bills")
-        .update({
-          status: "paid",
-          paid_at: paidAt,
-          transaction_id: transaction.id,
-          updated_at: paidAt,
-        })
-        .eq("id", bill.id)
-        .eq("user_id", userId)
-        .select()
-        .single();
+      const { data, error } = await supabase.rpc("mark_bill_paid", {
+        p_bill_id: bill.id,
+        p_paid_at: paidAt,
+        p_transaction_date: paidDate,
+      });
 
       if (error) throw error;
 
+      const result = data as { bill?: Bill } | null;
+      const updatedBill = result?.bill;
+
+      if (!updatedBill) {
+        throw new Error("The paid bill could not be returned by the database.");
+      }
+
       setBills((current) =>
-        current.map((item) => (item.id === bill.id ? (updated as Bill) : item)),
+        current.map((item) =>
+          item.id === updatedBill.id ? updatedBill : item,
+        ),
       );
 
       setMessage("Bill marked paid and added to Transactions.");
       notifyLumeraDataChange("all");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "The bill could not be marked paid.");
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The bill could not be marked paid.",
+      );
     } finally {
       setBusy(null);
     }
@@ -526,7 +512,7 @@ export function BillsManager({
               </div>
               <div className={styles.cardActions}>
                 {status !== "paid" && status !== "cancelled" && (
-                  <button className={styles.paidButton} onClick={()=>markPaid(bill)} disabled={busy===bill.id}><Check size={16}/>Mark paid</button>
+                  <button className={styles.paidButton} onClick={()=>markPaid(bill)} disabled={busy === `paid-${bill.id}`}><Check size={16}/>{busy === `paid-${bill.id}` ? "Marking…" : "Mark paid"}</button>
                 )}
                 <button className={styles.iconButton} onClick={()=>editBill(bill)} aria-label="Edit bill"><Edit3 size={17}/></button>
                 <button className={`${styles.iconButton} ${styles.deleteButton}`} onClick={()=>requestBillDeletion(bill)} aria-label="Delete bill"><Trash2 size={17}/></button>
