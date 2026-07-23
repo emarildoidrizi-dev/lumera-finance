@@ -27,3 +27,15 @@
   text-align:center;
   border-bottom:1px solid #eee7de;
 }
+
+.cleanCardHeader{
+  display:flex;
+  align-items:center;
+  min-height:72px;
+}
+.cleanCardHeader h3{
+  margin:0;
+}
+.compactCard .compactTable{
+  grid-template-columns:minmax(0,1fr) minmax(150px,.55fr);
+}

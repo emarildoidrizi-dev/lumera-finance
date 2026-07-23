@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, Plus, Trash2, WalletCards } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import styles from "./MonthlyPlanner.module.css";
@@ -11,7 +11,7 @@ type Bill = { id:string; user_id:string; name:string; category:string; amount_eu
 type Plan = { id:string; user_id:string; month:string; start_balance:number|string; created_at:string; updated_at:string };
 type Item = { id:string; user_id:string; month:string; section:Section; label:string; planned_amount:number|string; position:number; created_at:string; updated_at:string };
 
-const compactSections = new Set<Section>(["income","bills","debt"]);
+const compactSections = new Set<Section>(["income","bills","savings","debt"]);
 const sections: {key:Section; title:string}[] = [
   {key:"income",title:"Income"},{key:"bills",title:"Bills"},{key:"expenses",title:"Expenses"},{key:"savings",title:"Savings"},{key:"debt",title:"Debt"},
 ];
@@ -36,7 +36,6 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
   const [bills,setBills]=useState(initialBills);
   const [plans,setPlans]=useState(initialPlans);
   const [items,setItems]=useState(initialItems);
-  const [addSection,setAddSection]=useState<Section|null>(null);
   const [notice,setNotice]=useState("");
 
   useEffect(()=>{ if(!notice)return; const t=setTimeout(()=>setNotice(""),3500); return()=>clearTimeout(t)},[notice]);
@@ -76,7 +75,6 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
 
   function shiftMonth(n:number){const d=new Date(`${month}-01T12:00:00`);d.setMonth(d.getMonth()+n);setMonth(monthKey(d));}
   async function saveStartBalance(v:string){const value=Number(v)||0; const payload={user_id:userId,month,start_balance:value,updated_at:new Date().toISOString()}; const {data,error}=await supabase.from("monthly_budget_plans").upsert(payload,{onConflict:"user_id,month"}).select().single(); if(error)setNotice(error.message); else {setPlans(c=>[data as Plan,...c.filter(x=>x.month!==month)]);setNotice("Starting balance updated.")}}
-  async function addItem(e:FormEvent<HTMLFormElement>){e.preventDefault();if(!addSection)return;const f=new FormData(e.currentTarget);const label=String(f.get("label")||"").trim();const amount=Number(f.get("amount"));if(!label||!amount)return;const {data,error}=await supabase.from("monthly_budget_items").insert({user_id:userId,month,section:addSection,label,planned_amount:amount,position:monthItems.filter(i=>i.section===addSection).length}).select().single();if(error)setNotice(error.message);else{setItems(c=>[...c,data as Item]);setAddSection(null);setNotice("Budget item added.")}}
   async function deleteItem(id:string){const {error}=await supabase.from("monthly_budget_items").delete().eq("id",id).eq("user_id",userId);if(error)setNotice(error.message);else setItems(c=>c.filter(i=>i.id!==id))}
 
   return <section className={styles.planner}>
@@ -136,11 +134,29 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
                 }, {})
             : {};
 
+        const savingsRows =
+          s.key === "savings"
+            ? monthTx
+                .filter(
+                  (transaction) =>
+                    transaction.type !== "income" &&
+                    classify(transaction) === "savings",
+                )
+                .reduce<Record<string, number>>((rows, transaction) => {
+                  rows[transaction.description] =
+                    (rows[transaction.description] || 0) +
+                    Number(transaction.amount_eur);
+                  return rows;
+                }, {})
+            : {};
+
         const compactRows =
           s.key === "income"
             ? Object.entries(incomeRows)
             : s.key === "bills"
               ? Object.entries(billRows)
+              : s.key === "savings"
+              ? Object.entries(savingsRows)
               : s.key === "debt"
                 ? Object.entries(debtRows)
                 : [];
@@ -152,12 +168,8 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
             }`}
             key={s.key}
           >
-            <header>
+            <header className={styles.cleanCardHeader}>
               <h3>{s.title}</h3>
-              <button onClick={() => setAddSection(s.key)}>
-                <Plus size={16} />
-                Add
-              </button>
             </header>
 
             {isCompact ? (
@@ -241,6 +253,5 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
       })}
     </div>
     <div className={styles.bottomGrid}><article className={styles.expenseTracker}><h3>Expense tracker</h3><div className={styles.expenseHead}><span>Date</span><span>Amount</span><span>Category</span><span>Notes</span></div>{monthTx.filter(t=>t.type!=="income").slice(0,15).map(t=><div className={styles.expenseRow} key={t.id}><span>{t.transaction_date}</span><span>{eur(Number(t.amount_eur))}</span><span>{t.category}</span><span>{t.description}</span></div>)}</article><article className={styles.spending}><h3>Spending breakdown</h3>{monthTx.filter(t=>t.type!=="income").reduce<Record<string,number>>((a,t)=>(a[t.category]=(a[t.category]||0)+Number(t.amount_eur),a),{}) && Object.entries(monthTx.filter(t=>t.type!=="income").reduce<Record<string,number>>((a,t)=>(a[t.category]=(a[t.category]||0)+Number(t.amount_eur),a),{})).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=><div key={k}><span>{k}</span><b>{eur(v)}</b><em>{totalOut?`${(v/totalOut*100).toFixed(1)}%`:"0%"}</em></div>)}</article></div>
-    {addSection&&<div className={styles.modal}><form onSubmit={addItem}><button type="button" onClick={()=>setAddSection(null)}>×</button><WalletCards/><h3>Add {addSection} budget</h3><label>Item name<input name="label" required placeholder="e.g. Groceries"/></label><label>Planned amount (€)<input name="amount" type="number" min="0.01" step="0.01" required/></label><button className={styles.save}>Add to {monthTitle(month)}</button></form></div>}
   </section>
 }
