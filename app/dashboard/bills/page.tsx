@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BillsManager } from "@/components/BillsManager";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function BillsPage() {
   const supabase = await createClient();
   const {

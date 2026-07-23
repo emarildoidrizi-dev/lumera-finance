@@ -10,7 +10,7 @@ import {
   Target,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { MouseEvent, useEffect, useState } from "react";
 import { Brand } from "./Brand";
 import { SignOutButton } from "./SignOutButton";
 import styles from "./SidebarNavigation.module.css";
@@ -28,22 +28,27 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const routeHrefs = useMemo(() => links.map(([href]) => href), []);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      routeHrefs.forEach((href) => router.prefetch(href));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [routeHrefs, router]);
-
-  useEffect(() => setPendingHref(null), [pathname]);
+    if (!pendingHref) return;
+    if (pathname === pendingHref || pathname.startsWith(`${pendingHref}/`)) {
+      router.refresh();
+      setPendingHref(null);
+    }
+  }, [pathname, pendingHref, router]);
 
   useEffect(() => {
     if (!pendingHref) return;
     const timer = window.setTimeout(() => setPendingHref(null), 8000);
     return () => window.clearTimeout(timer);
   }, [pendingHref]);
+
+  function navigateFresh(event: MouseEvent<HTMLAnchorElement>, href: string, active: boolean) {
+    if (active) return;
+    event.preventDefault();
+    setPendingHref(href);
+    router.push(href);
+  }
 
   return (
     <aside className="sidebar">
@@ -58,13 +63,9 @@ export function Sidebar() {
               className={`side-link ${styles.link}${isActive ? " active" : ""}${isPending ? ` ${styles.pending}` : ""}`}
               href={href}
               key={href}
-              prefetch
+              prefetch={false}
               aria-current={isActive ? "page" : undefined}
-              onPointerEnter={() => router.prefetch(href)}
-              onFocus={() => router.prefetch(href)}
-              onClick={() => {
-                if (!isActive) setPendingHref(href);
-              }}
+              onClick={(event) => navigateFresh(event, href, isActive)}
             >
               <Icon size={18} aria-hidden="true" />
               <span>{label}</span>

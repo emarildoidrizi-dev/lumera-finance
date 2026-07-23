@@ -2,6 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { TransactionForm } from "@/components/TransactionForm";
 import { TransactionLedger } from "@/components/TransactionLedger";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function TransactionsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase

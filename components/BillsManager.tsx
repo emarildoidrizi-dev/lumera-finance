@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { notifyLumeraDataChange } from "@/lib/lumeraRealtime";
 import styles from "./BillsManager.module.css";
 
 type BillStatus = "pending" | "paid" | "cancelled";
@@ -320,6 +321,7 @@ export function BillsManager({
       }
 
       setMessage(editingId ? "Bill updated." : "Bill added.");
+      notifyLumeraDataChange("bills");
       resetForm();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The bill could not be saved.");
@@ -377,6 +379,7 @@ export function BillsManager({
       );
 
       setMessage("Bill marked paid and added to Transactions.");
+      notifyLumeraDataChange("all");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "The bill could not be marked paid.");
     } finally {
@@ -420,6 +423,7 @@ export function BillsManager({
       // Update this page immediately; Realtime handles other tabs and sections.
       setBills((current) => current.filter((item) => item.id !== bill.id));
       setBillPendingDeletion(null);
+      notifyLumeraDataChange("all");
       setMessage(
         bill.transaction_id
           ? "Bill and linked transaction deleted."
