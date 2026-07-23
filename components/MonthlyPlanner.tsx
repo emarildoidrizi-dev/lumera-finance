@@ -11,6 +11,7 @@ type Bill = { id:string; user_id:string; name:string; category:string; amount_eu
 type Plan = { id:string; user_id:string; month:string; start_balance:number|string; created_at:string; updated_at:string };
 type Item = { id:string; user_id:string; month:string; section:Section; label:string; planned_amount:number|string; position:number; created_at:string; updated_at:string };
 
+const compactSections = new Set<Section>(["income","bills","debt"]);
 const sections: {key:Section; title:string}[] = [
   {key:"income",title:"Income"},{key:"bills",title:"Bills"},{key:"expenses",title:"Expenses"},{key:"savings",title:"Savings"},{key:"debt",title:"Debt"},
 ];
@@ -87,7 +88,157 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
       <article className={styles.breakdown}><h3>Breakdown</h3><div className={styles.pie} style={{background:gradient}}/><div>{spendingParts.map((p,i)=><span key={p.key}><i style={{background:palette[i%palette.length]}}/>{p.key} {totalOut?Math.round(p.value/totalOut*100):0}%</span>)}</div></article>
     </div>
     <div className={styles.cashFlow}><h3>Cash flow</h3><div><span>Start balance<b>{eur(startBalance)}</b></span><span>Income<b>{eur(totalIncome)}</b></span><span>Bills & expenses<b>-{eur(actual("bills")+actual("expenses"))}</b></span><span>Savings<b>-{eur(actual("savings"))}</b></span><span>Debt<b>-{eur(actual("debt"))}</b></span><span className={styles.left}>Left<b>{eur(left)}</b></span></div></div>
-    <div className={styles.sectionGrid}>{sections.map(s=><article className={`${styles.tableCard} ${styles[s.key]}`} key={s.key}><header><h3>{s.title}</h3><button onClick={()=>setAddSection(s.key)}><Plus size={16}/>Add</button></header><div className={styles.tableHead}><span>Item</span><span>Budget</span><span>Actual</span><span>Left</span></div>{monthItems.filter(i=>i.section===s.key).map(i=>{const matchingActual=s.key==="income"?monthTx.filter(t=>t.type==="income"&&t.description.toLowerCase().includes(i.label.toLowerCase())).reduce((a,t)=>a+Number(t.amount_eur),0):0;return <div className={styles.row} key={i.id}><span>{i.label}</span><span>{eur(Number(i.planned_amount))}</span><span>{matchingActual?eur(matchingActual):"—"}</span><span>{eur(Number(i.planned_amount)-matchingActual)}</span><button onClick={()=>deleteItem(i.id)}><Trash2 size={14}/></button></div>})}<footer><span>Total</span><b>{eur(planned(s.key))}</b><b>{eur(actual(s.key))}</b><b>{eur(planned(s.key)-actual(s.key))}</b></footer></article>)}</div>
+    <div className={styles.sectionGrid}>
+      {sections.map((s) => {
+        const isCompact = compactSections.has(s.key);
+        const sectionItems = monthItems.filter((item) => item.section === s.key);
+
+        const incomeRows =
+          s.key === "income"
+            ? monthTx
+                .filter((transaction) => transaction.type === "income")
+                .reduce<Record<string, number>>((rows, transaction) => {
+                  rows[transaction.description] =
+                    (rows[transaction.description] || 0) +
+                    Number(transaction.amount_eur);
+                  return rows;
+                }, {})
+            : {};
+
+        const billRows =
+          s.key === "bills"
+            ? bills
+                .filter(
+                  (bill) =>
+                    bill.status === "paid" &&
+                    (inMonth(bill.paid_at, month) || inMonth(bill.due_date, month)),
+                )
+                .reduce<Record<string, number>>((rows, bill) => {
+                  rows[bill.name] = (rows[bill.name] || 0) + Number(bill.amount_eur);
+                  return rows;
+                }, {})
+            : {};
+
+        const debtRows =
+          s.key === "debt"
+            ? monthTx
+                .filter(
+                  (transaction) =>
+                    transaction.type !== "income" &&
+                    classify(transaction) === "debt",
+                )
+                .reduce<Record<string, number>>((rows, transaction) => {
+                  rows[transaction.description] =
+                    (rows[transaction.description] || 0) +
+                    Number(transaction.amount_eur);
+                  return rows;
+                }, {})
+            : {};
+
+        const compactRows =
+          s.key === "income"
+            ? Object.entries(incomeRows)
+            : s.key === "bills"
+              ? Object.entries(billRows)
+              : s.key === "debt"
+                ? Object.entries(debtRows)
+                : [];
+
+        return (
+          <article
+            className={`${styles.tableCard} ${styles[s.key]} ${
+              isCompact ? styles.compactCard : ""
+            }`}
+            key={s.key}
+          >
+            <header>
+              <h3>{s.title}</h3>
+              <button onClick={() => setAddSection(s.key)}>
+                <Plus size={16} />
+                Add
+              </button>
+            </header>
+
+            {isCompact ? (
+              <>
+                <div className={`${styles.tableHead} ${styles.compactTable}`}>
+                  <span>Item</span>
+                  <span>Actual</span>
+                </div>
+
+                {compactRows.length ? (
+                  compactRows.map(([label, value]) => (
+                    <div
+                      className={`${styles.row} ${styles.compactTable}`}
+                      key={`${s.key}-${label}`}
+                    >
+                      <span>{label}</span>
+                      <span>{eur(value)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className={styles.compactEmpty}>No actual records yet.</div>
+                )}
+
+                <footer className={styles.compactFooter}>
+                  <span>Total</span>
+                  <b>{eur(actual(s.key))}</b>
+                </footer>
+              </>
+            ) : (
+              <>
+                <div className={styles.tableHead}>
+                  <span>Item</span>
+                  <span>Budget</span>
+                  <span>Actual</span>
+                  <span>Left</span>
+                </div>
+
+                {sectionItems.map((item) => {
+                  const matchingActual =
+                    s.key === "income"
+                      ? monthTx
+                          .filter(
+                            (transaction) =>
+                              transaction.type === "income" &&
+                              transaction.description
+                                .toLowerCase()
+                                .includes(item.label.toLowerCase()),
+                          )
+                          .reduce(
+                            (total, transaction) =>
+                              total + Number(transaction.amount_eur),
+                            0,
+                          )
+                      : 0;
+
+                  return (
+                    <div className={styles.row} key={item.id}>
+                      <span>{item.label}</span>
+                      <span>{eur(Number(item.planned_amount))}</span>
+                      <span>{matchingActual ? eur(matchingActual) : "—"}</span>
+                      <span>
+                        {eur(Number(item.planned_amount) - matchingActual)}
+                      </span>
+                      <button onClick={() => deleteItem(item.id)}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  );
+                })}
+
+                <footer>
+                  <span>Total</span>
+                  <b>{eur(planned(s.key))}</b>
+                  <b>{eur(actual(s.key))}</b>
+                  <b>{eur(planned(s.key) - actual(s.key))}</b>
+                </footer>
+              </>
+            )}
+          </article>
+        );
+      })}
+    </div>
     <div className={styles.bottomGrid}><article className={styles.expenseTracker}><h3>Expense tracker</h3><div className={styles.expenseHead}><span>Date</span><span>Amount</span><span>Category</span><span>Notes</span></div>{monthTx.filter(t=>t.type!=="income").slice(0,15).map(t=><div className={styles.expenseRow} key={t.id}><span>{t.transaction_date}</span><span>{eur(Number(t.amount_eur))}</span><span>{t.category}</span><span>{t.description}</span></div>)}</article><article className={styles.spending}><h3>Spending breakdown</h3>{monthTx.filter(t=>t.type!=="income").reduce<Record<string,number>>((a,t)=>(a[t.category]=(a[t.category]||0)+Number(t.amount_eur),a),{}) && Object.entries(monthTx.filter(t=>t.type!=="income").reduce<Record<string,number>>((a,t)=>(a[t.category]=(a[t.category]||0)+Number(t.amount_eur),a),{})).sort((a,b)=>b[1]-a[1]).slice(0,10).map(([k,v])=><div key={k}><span>{k}</span><b>{eur(v)}</b><em>{totalOut?`${(v/totalOut*100).toFixed(1)}%`:"0%"}</em></div>)}</article></div>
     {addSection&&<div className={styles.modal}><form onSubmit={addItem}><button type="button" onClick={()=>setAddSection(null)}>×</button><WalletCards/><h3>Add {addSection} budget</h3><label>Item name<input name="label" required placeholder="e.g. Groceries"/></label><label>Planned amount (€)<input name="amount" type="number" min="0.01" step="0.01" required/></label><button className={styles.save}>Add to {monthTitle(month)}</button></form></div>}
   </section>
