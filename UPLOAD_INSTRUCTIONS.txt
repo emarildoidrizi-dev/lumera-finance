@@ -1,0 +1,15 @@
+LUMERA — MIRROR CASH FLOW LEFT AT TOP
+
+Upload only:
+- components/MonthlyPlanner.tsx
+
+Commit message:
+Mirror cash flow left in top budget widget
+
+Changes:
+- Cash Flow → Left remains the single calculation.
+- Left to Budget displays exactly the same amount.
+- Both values update together from the same live state.
+- The circular progress uses current available cash only for visualization.
+
+No Supabase or SQL changes are required.
