@@ -10,7 +10,7 @@ import {
   Target,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { MouseEvent, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Brand } from "./Brand";
 import { SignOutButton } from "./SignOutButton";
 import styles from "./SidebarNavigation.module.css";
@@ -19,7 +19,7 @@ const links = [
   ["/dashboard", LayoutDashboard, "Overview"],
   ["/dashboard/transactions", ArrowLeftRight, "Transactions"],
   ["/dashboard/bills", ReceiptText, "Bills"],
-  ["/dashboard/budget", ChartPie, "Budget"],
+  ["/dashboard/budget", ChartPie, "Monthly planner"],
   ["/dashboard/goals", Target, "Goals"],
   ["/dashboard/net-worth", Landmark, "Net worth"],
 ] as const;
@@ -28,27 +28,22 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const routeHrefs = useMemo(() => links.map(([href]) => href), []);
 
   useEffect(() => {
-    if (!pendingHref) return;
-    if (pathname === pendingHref || pathname.startsWith(`${pendingHref}/`)) {
-      router.refresh();
-      setPendingHref(null);
-    }
-  }, [pathname, pendingHref, router]);
+    const timer = window.setTimeout(() => {
+      routeHrefs.forEach((href) => router.prefetch(href));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [routeHrefs, router]);
+
+  useEffect(() => setPendingHref(null), [pathname]);
 
   useEffect(() => {
     if (!pendingHref) return;
     const timer = window.setTimeout(() => setPendingHref(null), 8000);
     return () => window.clearTimeout(timer);
   }, [pendingHref]);
-
-  function navigateFresh(event: MouseEvent<HTMLAnchorElement>, href: string, active: boolean) {
-    if (active) return;
-    event.preventDefault();
-    setPendingHref(href);
-    router.push(href);
-  }
 
   return (
     <aside className="sidebar">
@@ -63,9 +58,13 @@ export function Sidebar() {
               className={`side-link ${styles.link}${isActive ? " active" : ""}${isPending ? ` ${styles.pending}` : ""}`}
               href={href}
               key={href}
-              prefetch={false}
+              prefetch
               aria-current={isActive ? "page" : undefined}
-              onClick={(event) => navigateFresh(event, href, isActive)}
+              onPointerEnter={() => router.prefetch(href)}
+              onFocus={() => router.prefetch(href)}
+              onClick={() => {
+                if (!isActive) setPendingHref(href);
+              }}
             >
               <Icon size={18} aria-hidden="true" />
               <span>{label}</span>
