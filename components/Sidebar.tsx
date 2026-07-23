@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   ArrowLeftRight,
   ChartPie,
+  CircleDollarSign,
   Landmark,
   LayoutDashboard,
   ReceiptText,
@@ -21,6 +22,7 @@ const links = [
   ["/dashboard/bills", ReceiptText, "Bills"],
   ["/dashboard/budget", ChartPie, "Monthly planner"],
   ["/dashboard/goals", Target, "Goals"],
+  ["/dashboard/debt", CircleDollarSign, "Debt"],
   ["/dashboard/net-worth", Landmark, "Net worth"],
 ] as const;
 
