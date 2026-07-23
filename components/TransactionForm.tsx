@@ -190,9 +190,11 @@ export function TransactionForm() {
       setCustomCategory("");
       setLoading(false);
 
-      const { error: insertError } = await supabase
+      const { data: savedTransaction, error: insertError } = await supabase
         .from("transactions")
-        .insert(optimisticTransaction);
+        .insert(optimisticTransaction)
+        .select("id,user_id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at")
+        .single();
 
       if (insertError) {
         window.dispatchEvent(
@@ -201,6 +203,14 @@ export function TransactionForm() {
           }),
         );
         throw insertError;
+      }
+
+      if (savedTransaction) {
+        window.dispatchEvent(
+          new CustomEvent("lumera:transaction-upserted", {
+            detail: savedTransaction,
+          }),
+        );
       }
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Unable to save this transaction.");

@@ -136,6 +136,34 @@ export function BillsManager({
   const [message, setMessage] = useState(initialError);
 
   useEffect(() => {
+    setBills(initialBills);
+  }, [initialBills]);
+
+  useEffect(() => {
+    function handleBillUpserted(event: Event) {
+      const bill = (event as CustomEvent<Bill>).detail;
+      if (!bill?.id) return;
+      setBills((current) => [
+        ...current.filter((item) => item.id !== bill.id),
+        bill,
+      ]);
+    }
+
+    function handleBillDeleted(event: Event) {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setBills((current) => current.filter((item) => item.id !== id));
+    }
+
+    window.addEventListener("lumera:bill-upserted", handleBillUpserted);
+    window.addEventListener("lumera:bill-deleted", handleBillDeleted);
+    return () => {
+      window.removeEventListener("lumera:bill-upserted", handleBillUpserted);
+      window.removeEventListener("lumera:bill-deleted", handleBillDeleted);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!message) return;
 
     const timer = window.setTimeout(() => {
@@ -284,6 +312,9 @@ export function BillsManager({
         setBills((current) =>
           current.map((bill) => (bill.id === editingId ? (data as Bill) : bill)),
         );
+        window.dispatchEvent(
+          new CustomEvent("lumera:bill-upserted", { detail: data as Bill }),
+        );
       } else {
         const { data, error } = await supabase
           .from("bills")
@@ -295,6 +326,9 @@ export function BillsManager({
           current.some((bill) => bill.id === data.id)
             ? current
             : [...current, data as Bill],
+        );
+        window.dispatchEvent(
+          new CustomEvent("lumera:bill-upserted", { detail: data as Bill }),
         );
       }
 
@@ -331,7 +365,7 @@ export function BillsManager({
           transaction_date: new Date().toISOString().slice(0, 10),
           occurred_at: paidAt,
         })
-        .select("id")
+        .select("id,user_id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at")
         .single();
 
       if (transactionError) throw transactionError;
@@ -354,6 +388,12 @@ export function BillsManager({
       setBills((current) =>
         current.map((item) => (item.id === bill.id ? (updated as Bill) : item)),
       );
+      window.dispatchEvent(
+        new CustomEvent("lumera:bill-upserted", { detail: updated as Bill }),
+      );
+      window.dispatchEvent(
+        new CustomEvent("lumera:transaction-upserted", { detail: transaction }),
+      );
 
       setMessage("Bill marked paid and added to Transactions.");
     } catch (error) {
@@ -372,7 +412,12 @@ export function BillsManager({
       .eq("id", bill.id)
       .eq("user_id", userId);
     if (error) setMessage(error.message);
-    else setBills((current) => current.filter((item) => item.id !== bill.id));
+    else {
+      setBills((current) => current.filter((item) => item.id !== bill.id));
+      window.dispatchEvent(
+        new CustomEvent("lumera:bill-deleted", { detail: { id: bill.id } }),
+      );
+    }
     setBusy(null);
   }
 

@@ -109,6 +109,10 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
+    setTransactions(initialTransactions);
+  }, [initialTransactions]);
+
+  useEffect(() => {
     function handleCreated(event: Event) {
       const created = (event as CustomEvent<Transaction>).detail;
       if (!created?.id) return;
@@ -129,6 +133,21 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       window.setTimeout(() => setNotice(""), 2600);
     }
 
+    function handleUpserted(event: Event) {
+      const changed = (event as CustomEvent<Transaction>).detail;
+      if (!changed?.id) return;
+      setTransactions((current) => [
+        changed,
+        ...current.filter((item) => item.id !== changed.id),
+      ]);
+    }
+
+    function handleDeleted(event: Event) {
+      const deletedId = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!deletedId) return;
+      setTransactions((current) => current.filter((item) => item.id !== deletedId));
+    }
+
     function handleSaveFailed(event: Event) {
       const failedId = (event as CustomEvent<{ id?: string }>).detail?.id;
       if (!failedId) return;
@@ -137,9 +156,13 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     }
 
     window.addEventListener("lumera:transaction-created", handleCreated);
+    window.addEventListener("lumera:transaction-upserted", handleUpserted);
+    window.addEventListener("lumera:transaction-deleted", handleDeleted);
     window.addEventListener("lumera:transaction-save-failed", handleSaveFailed);
     return () => {
       window.removeEventListener("lumera:transaction-created", handleCreated);
+      window.removeEventListener("lumera:transaction-upserted", handleUpserted);
+      window.removeEventListener("lumera:transaction-deleted", handleDeleted);
       window.removeEventListener("lumera:transaction-save-failed", handleSaveFailed);
     };
   }, []);
@@ -327,6 +350,11 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     if (deleteError) setError(deleteError.message);
     else {
       setTransactions((current) => current.filter((item) => item.id !== deleteTarget.id));
+      window.dispatchEvent(
+        new CustomEvent("lumera:transaction-deleted", {
+          detail: { id: deleteTarget.id },
+        }),
+      );
       setDeleteTarget(null);
       setNotice("Transaction deleted.");
       window.setTimeout(() => setNotice(""), 2600);
@@ -380,6 +408,9 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
     if (updateError) setError(updateError.message);
     else if (data) {
       setTransactions((current) => current.map((item) => (item.id === data.id ? data : item)));
+      window.dispatchEvent(
+        new CustomEvent("lumera:transaction-upserted", { detail: data }),
+      );
       setEditTarget(null);
       setNotice("Transaction updated.");
       window.setTimeout(() => setNotice(""), 2600);

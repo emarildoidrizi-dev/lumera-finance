@@ -95,6 +95,39 @@ export function DashboardLiveOverview({
   >("connecting");
 
   useEffect(() => {
+    setTransactions([...initialTransactions].sort(newestFirst));
+  }, [initialTransactions]);
+
+  useEffect(() => {
+    function upsert(event: Event) {
+      const transaction = (event as CustomEvent<Transaction>).detail;
+      if (!transaction?.id) return;
+      setTransactions((current) => [
+        transaction,
+        ...current.filter((item) => item.id !== transaction.id),
+      ].sort(newestFirst));
+    }
+
+    function remove(event: Event) {
+      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setTransactions((current) => current.filter((item) => item.id !== id));
+    }
+
+    window.addEventListener("lumera:transaction-created", upsert);
+    window.addEventListener("lumera:transaction-upserted", upsert);
+    window.addEventListener("lumera:transaction-deleted", remove);
+    window.addEventListener("lumera:transaction-save-failed", remove);
+
+    return () => {
+      window.removeEventListener("lumera:transaction-created", upsert);
+      window.removeEventListener("lumera:transaction-upserted", upsert);
+      window.removeEventListener("lumera:transaction-deleted", remove);
+      window.removeEventListener("lumera:transaction-save-failed", remove);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!userId) return;
 
     const channel = supabase
