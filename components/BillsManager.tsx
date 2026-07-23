@@ -134,34 +134,7 @@ export function BillsManager({
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState(initialError);
-
-  useEffect(() => {
-    setBills(initialBills);
-  }, [initialBills]);
-
-  useEffect(() => {
-    function handleBillUpserted(event: Event) {
-      const bill = (event as CustomEvent<Bill>).detail;
-      if (!bill?.id) return;
-      setBills((current) => [
-        ...current.filter((item) => item.id !== bill.id),
-        bill,
-      ]);
-    }
-
-    function handleBillDeleted(event: Event) {
-      const id = (event as CustomEvent<{ id?: string }>).detail?.id;
-      if (!id) return;
-      setBills((current) => current.filter((item) => item.id !== id));
-    }
-
-    window.addEventListener("lumera:bill-upserted", handleBillUpserted);
-    window.addEventListener("lumera:bill-deleted", handleBillDeleted);
-    return () => {
-      window.removeEventListener("lumera:bill-upserted", handleBillUpserted);
-      window.removeEventListener("lumera:bill-deleted", handleBillDeleted);
-    };
-  }, []);
+  const [billPendingDeletion, setBillPendingDeletion] = useState<Bill | null>(null);
 
   useEffect(() => {
     if (!message) return;
@@ -172,6 +145,26 @@ export function BillsManager({
 
     return () => window.clearTimeout(timer);
   }, [message]);
+
+  useEffect(() => {
+    if (!billPendingDeletion) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !busy) {
+        setBillPendingDeletion(null);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [billPendingDeletion, busy]);
 
   useEffect(() => {
     const channel = supabase
@@ -312,9 +305,6 @@ export function BillsManager({
         setBills((current) =>
           current.map((bill) => (bill.id === editingId ? (data as Bill) : bill)),
         );
-        window.dispatchEvent(
-          new CustomEvent("lumera:bill-upserted", { detail: data as Bill }),
-        );
       } else {
         const { data, error } = await supabase
           .from("bills")
@@ -326,9 +316,6 @@ export function BillsManager({
           current.some((bill) => bill.id === data.id)
             ? current
             : [...current, data as Bill],
-        );
-        window.dispatchEvent(
-          new CustomEvent("lumera:bill-upserted", { detail: data as Bill }),
         );
       }
 
@@ -365,7 +352,7 @@ export function BillsManager({
           transaction_date: new Date().toISOString().slice(0, 10),
           occurred_at: paidAt,
         })
-        .select("id,user_id,description,amount,currency,amount_eur,exchange_rate_to_eur,exchange_rate_date,exchange_rate_source,type,category,transaction_date,occurred_at,created_at")
+        .select("id")
         .single();
 
       if (transactionError) throw transactionError;
@@ -388,12 +375,6 @@ export function BillsManager({
       setBills((current) =>
         current.map((item) => (item.id === bill.id ? (updated as Bill) : item)),
       );
-      window.dispatchEvent(
-        new CustomEvent("lumera:bill-upserted", { detail: updated as Bill }),
-      );
-      window.dispatchEvent(
-        new CustomEvent("lumera:transaction-upserted", { detail: transaction }),
-      );
 
       setMessage("Bill marked paid and added to Transactions.");
     } catch (error) {
@@ -403,22 +384,56 @@ export function BillsManager({
     }
   }
 
-  async function removeBill(bill: Bill) {
-    if (busy || !window.confirm(`Delete "${bill.name}"? This cannot be undone.`)) return;
-    setBusy(bill.id);
-    const { error } = await supabase
-      .from("bills")
-      .delete()
-      .eq("id", bill.id)
-      .eq("user_id", userId);
-    if (error) setMessage(error.message);
-    else {
+  function requestBillDeletion(bill: Bill) {
+    if (busy) return;
+    setBillPendingDeletion(bill);
+  }
+
+  async function confirmBillDeletion() {
+    const bill = billPendingDeletion;
+    if (!bill || busy) return;
+
+    setBusy(`delete-${bill.id}`);
+    setMessage("");
+
+    try {
+      // A paid bill may have created a linked transaction. Delete that first so
+      // Transactions, Overview and every subscribed tab update immediately.
+      if (bill.transaction_id) {
+        const { error: transactionError } = await supabase
+          .from("transactions")
+          .delete()
+          .eq("id", bill.transaction_id)
+          .eq("user_id", userId);
+
+        if (transactionError) throw transactionError;
+      }
+
+      const { error: billError } = await supabase
+        .from("bills")
+        .delete()
+        .eq("id", bill.id)
+        .eq("user_id", userId);
+
+      if (billError) throw billError;
+
+      // Update this page immediately; Realtime handles other tabs and sections.
       setBills((current) => current.filter((item) => item.id !== bill.id));
-      window.dispatchEvent(
-        new CustomEvent("lumera:bill-deleted", { detail: { id: bill.id } }),
+      setBillPendingDeletion(null);
+      setMessage(
+        bill.transaction_id
+          ? "Bill and linked transaction deleted."
+          : "Bill deleted.",
       );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "The bill could not be deleted.",
+      );
+    } finally {
+      setBusy(null);
     }
-    setBusy(null);
   }
 
   return (
@@ -510,12 +525,89 @@ export function BillsManager({
                   <button className={styles.paidButton} onClick={()=>markPaid(bill)} disabled={busy===bill.id}><Check size={16}/>Mark paid</button>
                 )}
                 <button className={styles.iconButton} onClick={()=>editBill(bill)} aria-label="Edit bill"><Edit3 size={17}/></button>
-                <button className={`${styles.iconButton} ${styles.deleteButton}`} onClick={()=>removeBill(bill)} aria-label="Delete bill"><Trash2 size={17}/></button>
+                <button className={`${styles.iconButton} ${styles.deleteButton}`} onClick={()=>requestBillDeletion(bill)} aria-label="Delete bill"><Trash2 size={17}/></button>
               </div>
             </article>
           );
         })}
       </div>
+
+      {billPendingDeletion && (
+        <div
+          className={styles.modalBackdrop}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !busy) {
+              setBillPendingDeletion(null);
+            }
+          }}
+        >
+          <section
+            className={styles.confirmModal}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-bill-title"
+            aria-describedby="delete-bill-description"
+          >
+            <button
+              type="button"
+              className={styles.modalClose}
+              onClick={() => setBillPendingDeletion(null)}
+              disabled={Boolean(busy)}
+              aria-label="Close confirmation"
+            >
+              <X size={19} />
+            </button>
+
+            <div className={styles.modalIcon}>
+              <Trash2 size={24} />
+            </div>
+
+            <span className={styles.modalEyebrow}>CONFIRM DELETION</span>
+            <h3 id="delete-bill-title">Delete this bill?</h3>
+            <p id="delete-bill-description">
+              <strong>{billPendingDeletion.name}</strong> will be permanently
+              removed.
+              {billPendingDeletion.transaction_id
+                ? " Its linked transaction will also be removed from Transactions and all live totals."
+                : ""}
+            </p>
+
+            <div className={styles.modalBillSummary}>
+              <div>
+                <span>Bill</span>
+                <strong>{billPendingDeletion.name}</strong>
+              </div>
+              <div>
+                <span>EUR value</span>
+                <strong>{money(billPendingDeletion.amount_eur, "EUR")}</strong>
+              </div>
+            </div>
+
+            <div className={styles.modalActions}>
+              <button
+                type="button"
+                className={styles.modalCancel}
+                onClick={() => setBillPendingDeletion(null)}
+                disabled={Boolean(busy)}
+              >
+                Keep bill
+              </button>
+              <button
+                type="button"
+                className={styles.modalDelete}
+                onClick={confirmBillDeletion}
+                disabled={Boolean(busy)}
+              >
+                <Trash2 size={17} />
+                {busy === `delete-${billPendingDeletion.id}`
+                  ? "Deleting…"
+                  : "Delete bill"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
