@@ -66,7 +66,7 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
   const totalIncome=actual("income");
   const totalOut=actual("bills")+actual("expenses")+actual("savings")+actual("debt");
   // Single source of truth for remaining monthly money.
-  // The top "Left to budget" widget mirrors Cash Flow → Left exactly.
+  // The top "Available Capital" widget mirrors Cash Flow → Left exactly.
   const left=startBalance+totalIncome-totalOut;
   const leftToBudget=left;
   const availableCash=startBalance+totalIncome;
@@ -84,7 +84,7 @@ export function MonthlyPlanner({userId,initialTransactions,initialBills,initialP
     {notice&&<div className={styles.notice}>{notice}</div>}
     <div className={styles.topGrid}>
       <article className={styles.overview}><h3>Overview</h3><label>Start date<strong>01 {monthTitle(month)}</strong></label><label>End date<strong>{new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate()} {monthTitle(month)}</strong></label><label>Currency<strong>EUR</strong></label><label>Start balance<input defaultValue={startBalance} type="number" step="0.01" onBlur={e=>saveStartBalance(e.target.value)}/></label></article>
-      <article className={styles.donutCard}><h3>Left to budget</h3><div className={styles.ring} style={{"--progress":`${Math.max(0,Math.min(100,availableCash?Math.max(leftToBudget,0)/availableCash*100:0))}%`} as React.CSSProperties}><strong>{eur(left)}</strong></div></article>
+      <article className={styles.donutCard}><h3>Available Capital</h3><div className={styles.ring} style={{"--progress":`${Math.max(0,Math.min(100,availableCash?Math.max(leftToBudget,0)/availableCash*100:0))}%`} as React.CSSProperties}><strong>{eur(left)}</strong></div></article>
       <article className={styles.bars}><h3>Budget vs actual</h3>{sections.map(s=>{const max=Math.max(planned(s.key),actual(s.key),1);return <div key={s.key}><span>{s.title}</span><i><b style={{width:`${planned(s.key)/max*100}%`}}/><em style={{width:`${actual(s.key)/max*100}%`}}/></i></div>})}</article>
       <article className={styles.breakdown}><h3>Breakdown</h3><div className={styles.pie} style={{background:gradient}}/><div>{spendingParts.map((p,i)=><span key={p.key}><i style={{background:palette[i%palette.length]}}/>{p.key} {totalOut?Math.round(p.value/totalOut*100):0}%</span>)}</div></article>
     </div>
