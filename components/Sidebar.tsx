@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   ArrowLeftRight,
   ChartPie,
-  CircleDollarSign,
+  CreditCard,
   Landmark,
   LayoutDashboard,
   ReceiptText,
@@ -22,7 +22,7 @@ const links = [
   ["/dashboard/bills", ReceiptText, "Bills"],
   ["/dashboard/budget", ChartPie, "Monthly planner"],
   ["/dashboard/goals", Target, "Goals"],
-  ["/dashboard/debt", CircleDollarSign, "Debt"],
+  ["/dashboard/debt", CreditCard, "Debt"],
   ["/dashboard/net-worth", Landmark, "Net worth"],
 ] as const;
 
@@ -31,13 +31,6 @@ export function Sidebar() {
   const router = useRouter();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
   const routeHrefs = useMemo(() => links.map(([href]) => href), []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      routeHrefs.forEach((href) => router.prefetch(href));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [routeHrefs, router]);
 
   useEffect(() => setPendingHref(null), [pathname]);
 
@@ -52,31 +45,39 @@ export function Sidebar() {
       <Brand href="/dashboard" />
       <nav className="side-nav" aria-label="Private finance navigation">
         {links.map(([href, Icon, label]) => {
-          const isActive = href === "/dashboard" ? pathname === href : pathname.startsWith(href);
+          const isActive =
+            href === "/dashboard" ? pathname === href : pathname.startsWith(href);
           const isPending = pendingHref === href;
 
           return (
             <Link
-              className={`side-link ${styles.link}${isActive ? " active" : ""}${isPending ? ` ${styles.pending}` : ""}`}
+              className={`side-link ${styles.link}${isActive ? " active" : ""}${
+                isPending ? ` ${styles.pending}` : ""
+              }`}
               href={href}
               key={href}
-              prefetch
+              prefetch={false}
               aria-current={isActive ? "page" : undefined}
-              onPointerEnter={() => router.prefetch(href)}
-              onFocus={() => router.prefetch(href)}
               onClick={() => {
                 if (!isActive) setPendingHref(href);
               }}
             >
               <Icon size={18} aria-hidden="true" />
               <span>{label}</span>
-              {isPending ? <span className={styles.spinner} aria-label="Opening page" /> : null}
+              {isPending ? (
+                <span className={styles.spinner} aria-label="Opening page" />
+              ) : null}
             </Link>
           );
         })}
         <SignOutButton />
       </nav>
-      <div className={`${styles.progress}${pendingHref ? ` ${styles.progressVisible}` : ""}`} aria-hidden="true">
+      <div
+        className={`${styles.progress}${
+          pendingHref ? ` ${styles.progressVisible}` : ""
+        }`}
+        aria-hidden="true"
+      >
         <span />
       </div>
     </aside>

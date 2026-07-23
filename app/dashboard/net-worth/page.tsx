@@ -1,1 +1,36 @@
-export default function Page(){return <><header className="topbar"><div className="page-title"><h1>Net Worth</h1><p>This module is prepared for Sprint 2.</p></div></header><section className="panel"><div className="empty">The secure account foundation is live. We will connect this module to its own private database table next.</div></section></>}
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { NetWorthLive } from "@/components/NetWorthLive";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export default async function NetWorthPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const [{ data: debts, error: debtError }, { data: transactions, error: txError }] =
+    await Promise.all([
+      supabase
+        .from("debts")
+        .select("id,user_id,name,current_balance_eur,status,updated_at")
+        .eq("user_id", user.id),
+      supabase
+        .from("transactions")
+        .select("id,user_id,type,amount_eur,occurred_at,transaction_date")
+        .eq("user_id", user.id),
+    ]);
+
+  return (
+    <NetWorthLive
+      userId={user.id}
+      initialDebts={debts ?? []}
+      initialTransactions={transactions ?? []}
+      initialError={debtError?.message ?? txError?.message ?? ""}
+    />
+  );
+}
