@@ -20,6 +20,12 @@ export const TRANSACTION_TYPES: TransactionTypeOption[] = [
     group: "Transaction type",
     direction: "inflow",
   },
+  {
+    value: "saving",
+    label: "General Saving",
+    group: "Transaction type",
+    direction: "outflow",
+  },
 ];
 
 export const TYPE_BY_VALUE = Object.fromEntries(
