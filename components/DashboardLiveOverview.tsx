@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { formatCurrency } from "@/lib/financialOptions";
+import { FinancialHealthScore } from "@/components/FinancialHealthScore";
 import styles from "./DashboardLiveOverview.module.css";
 
 type Transaction = {
@@ -246,6 +247,8 @@ export function DashboardLiveOverview({
           <small className={styles.kpiNote}>Based on EUR-normalized totals</small>
         </div>
       </section>
+
+      <FinancialHealthScore transactions={transactions} />
 
       <section className="grid-2">
         <div className="panel">

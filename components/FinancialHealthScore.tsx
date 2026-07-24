@@ -5,7 +5,7 @@ import { Activity, ArrowUpRight, ShieldCheck } from "lucide-react";
 import { TYPE_BY_VALUE, type FlowDirection } from "@/lib/financialOptions";
 import styles from "./FinancialHealthScore.module.css";
 
-export type FinancialHealthTransaction = {
+type Transaction = {
   id: string;
   type: string;
   amount: number | string;
@@ -13,29 +13,28 @@ export type FinancialHealthTransaction = {
   transaction_date: string;
 };
 
-type Props = {
-  transactions: FinancialHealthTransaction[];
-};
+type Props = { transactions: Transaction[] };
 
 type HealthBreakdown = {
   score: number;
   label: "Excellent" | "Healthy" | "Needs attention" | "At risk";
   summary: string;
-  netCashFlow: number;
   savingsRate: number;
+  netCashFlow: number;
 };
 
 const directionOf = (type: string): FlowDirection =>
   TYPE_BY_VALUE[type]?.direction ??
   (type === "income" ? "inflow" : "outflow");
 
-const isSavingType = (type: string) => type.toLowerCase().includes("saving");
+const isSavingType = (type: string) =>
+  type.toLowerCase().includes("saving");
 
 function clamp(value: number, minimum: number, maximum: number) {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function calculateHealth(transactions: FinancialHealthTransaction[]): HealthBreakdown {
+function calculateHealth(transactions: Transaction[]): HealthBreakdown {
   let income = 0;
   let expenses = 0;
   let savings = 0;
@@ -71,42 +70,15 @@ function calculateHealth(transactions: FinancialHealthTransaction[]): HealthBrea
   );
 
   if (score >= 80) {
-    return {
-      score,
-      label: "Excellent",
-      summary: "Your recorded cash flow and saving habits show a strong foundation.",
-      netCashFlow,
-      savingsRate,
-    };
+    return { score, label: "Excellent", summary: "Your recorded cash flow and saving habits show a strong foundation.", savingsRate, netCashFlow };
   }
-
   if (score >= 65) {
-    return {
-      score,
-      label: "Healthy",
-      summary: "Your finances are generally stable, with room for focused improvement.",
-      netCashFlow,
-      savingsRate,
-    };
+    return { score, label: "Healthy", summary: "Your finances are generally stable, with room for focused improvement.", savingsRate, netCashFlow };
   }
-
   if (score >= 45) {
-    return {
-      score,
-      label: "Needs attention",
-      summary: "Your current records indicate pressure in cash flow or saving consistency.",
-      netCashFlow,
-      savingsRate,
-    };
+    return { score, label: "Needs attention", summary: "Your current records indicate pressure in cash flow or saving consistency.", savingsRate, netCashFlow };
   }
-
-  return {
-    score,
-    label: "At risk",
-    summary: "Your recorded outflows are placing significant pressure on your finances.",
-    netCashFlow,
-    savingsRate,
-  };
+  return { score, label: "At risk", summary: "Your recorded outflows are placing significant pressure on your finances.", savingsRate, netCashFlow };
 }
 
 export function FinancialHealthScore({ transactions }: Props) {
@@ -121,59 +93,24 @@ export function FinancialHealthScore({ transactions }: Props) {
           <span className={styles.eyebrow}>Financial health</span>
           <h2>Your financial score</h2>
         </div>
-        <div className={styles.live}>
-          <span />
-          Live
-        </div>
+        <div className={styles.live}><span />Live</div>
       </div>
 
       <div className={styles.content}>
         <div className={styles.gaugeWrap}>
-          <svg
-            className={styles.gauge}
-            viewBox="0 0 112 112"
-            role="img"
-            aria-label={`Financial health score ${health.score} out of 100`}
-          >
+          <svg className={styles.gauge} viewBox="0 0 112 112" role="img" aria-label={`Financial health score ${health.score} out of 100`}>
             <circle className={styles.gaugeTrack} cx="56" cy="56" r="46" />
-            <circle
-              className={styles.gaugeValue}
-              cx="56"
-              cy="56"
-              r="46"
-              strokeDasharray={circumference}
-              strokeDashoffset={dashOffset}
-            />
+            <circle className={styles.gaugeValue} cx="56" cy="56" r="46" strokeDasharray={circumference} strokeDashoffset={dashOffset} />
           </svg>
-
-          <div className={styles.score}>
-            <strong>{health.score}</strong>
-            <span>/ 100</span>
-          </div>
+          <div className={styles.score}><strong>{health.score}</strong><span>/ 100</span></div>
         </div>
 
         <div className={styles.assessment}>
-          <div className={styles.statusRow}>
-            <ShieldCheck size={18} />
-            <strong>{health.label}</strong>
-          </div>
-
+          <div className={styles.statusRow}><ShieldCheck size={18} /><strong>{health.label}</strong></div>
           <p>{health.summary}</p>
-
           <div className={styles.metrics}>
-            <div>
-              <span>Savings rate</span>
-              <strong>{(health.savingsRate * 100).toFixed(1)}%</strong>
-            </div>
-            <div>
-              <span>Net cash flow</span>
-              <strong>
-                {new Intl.NumberFormat("de-DE", {
-                  style: "currency",
-                  currency: "EUR",
-                }).format(health.netCashFlow)}
-              </strong>
-            </div>
+            <div><span>Savings rate</span><strong>{(health.savingsRate * 100).toFixed(1)}%</strong></div>
+            <div><span>Net cash flow</span><strong>{new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(health.netCashFlow)}</strong></div>
           </div>
         </div>
       </div>
@@ -183,10 +120,7 @@ export function FinancialHealthScore({ transactions }: Props) {
         <span>Based on recorded income, expenses, savings and cash flow.</span>
         <ArrowUpRight size={15} />
       </div>
-
-      <p className={styles.disclaimer}>
-        This is a Ficonter planning indicator, not a credit score or financial advice.
-      </p>
+      <p className={styles.disclaimer}>This is a Ficonter planning indicator, not a credit score or financial advice.</p>
     </section>
   );
 }
