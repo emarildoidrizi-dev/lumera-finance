@@ -27,8 +27,6 @@ export function AccountRecoveryForm({
     event.preventDefault();
     if (loading) return;
 
-    // Keep a stable reference before awaiting Supabase. React's currentTarget
-    // is only guaranteed while the submit event is being handled.
     const formElement = event.currentTarget;
     const formData = new FormData(formElement);
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
@@ -37,9 +35,7 @@ export function AccountRecoveryForm({
     setMessage(null);
 
     try {
-      const redirectTo =
-        `${window.location.origin}/auth/callback` +
-        `?next=${encodeURIComponent("/update-password")}`;
+      const redirectTo = `${window.location.origin}/update-password`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo,
