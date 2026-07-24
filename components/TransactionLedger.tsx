@@ -25,7 +25,7 @@ import {
   formatCurrency,
   type FlowDirection,
 } from "@/lib/financialOptions";
-import styles from "./TransactionLedgerRecovery.module.css";
+import styles from "./TransactionLedger.module.css";
 
 type Transaction = {
   id: string;
@@ -68,13 +68,6 @@ const toLocalDateTimeInput = (value: string | null, fallbackDate: string) => {
 };
 
 const csvCell = (value: string | number) => `"${String(value).replaceAll('"', '""')}"`;
-const htmlCell = (value: string | number) =>
-  String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 const directionOf = (type: string): FlowDirection => TYPE_BY_VALUE[type]?.direction ?? (type === "income" ? "inflow" : "outflow");
 const typeLabel = (type: string) => TYPE_BY_VALUE[type]?.label ?? type.replaceAll("_", " ");
 
@@ -102,8 +95,6 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
   const [currencyFilter, setCurrencyFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
-  const [exportFrom, setExportFrom] = useState("");
-  const [exportTo, setExportTo] = useState("");
   const [editTarget, setEditTarget] = useState<Transaction | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Transaction | null>(null);
   const [editCategory, setEditCategory] = useState("");
@@ -233,20 +224,6 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       });
   }, [transactions, search, directionFilter, categoryFilter, currencyFilter, monthFilter, sortMode]);
 
-  const invalidExportRange =
-    Boolean(exportFrom && exportTo) && exportFrom > exportTo;
-
-  const exportRows = useMemo(() => {
-    if (invalidExportRange) return [];
-
-    return visible.filter((item) => {
-      const transactionDate = item.transaction_date;
-      const afterStart = !exportFrom || transactionDate >= exportFrom;
-      const beforeEnd = !exportTo || transactionDate <= exportTo;
-      return afterStart && beforeEnd;
-    });
-  }, [visible, exportFrom, exportTo, invalidExportRange]);
-
   const totals = useMemo(() => {
     let inflow = 0;
     let outflow = 0;
@@ -274,25 +251,8 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
   }
 
   function exportCsv() {
-    if (invalidExportRange) {
-      setError("The export start date cannot be after the end date.");
-      return;
-    }
-
-    const header = [
-      "Description",
-      "Category",
-      "Occurred at",
-      "Transaction type",
-      "Direction",
-      "Currency",
-      "Original amount",
-      "EUR amount",
-      "Rate to EUR",
-      "Rate date",
-    ];
-
-    const rows = exportRows.map((item) => [
+    const header = ["Description", "Category", "Occurred at", "Transaction type", "Direction", "Currency", "Original amount", "EUR amount", "Rate to EUR", "Rate date"];
+    const rows = visible.map((item) => [
       item.description,
       item.category,
       item.occurred_at ?? item.transaction_date,
@@ -304,176 +264,16 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       Number(item.exchange_rate_to_eur ?? 1).toFixed(8),
       item.exchange_rate_date ?? "",
     ]);
-
-    const csv = [header, ...rows]
-      .map((row) => row.map(csvCell).join(","))
-      .join("\n");
-
-    const blob = new Blob([`\uFEFF${csv}`], {
-      type: "text/csv;charset=utf-8",
-    });
+    const csv = [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
-    const rangeLabel =
-      exportFrom || exportTo
-        ? `${exportFrom || "start"}-to-${exportTo || "latest"}`
-        : new Date().toISOString().slice(0, 10);
-
     anchor.href = url;
-    anchor.download = `ficonter-transactions-${rangeLabel}.csv`;
+    anchor.download = `lumera-transactions-${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
-
-    setNotice(`CSV export downloaded (${exportRows.length} records).`);
+    setNotice("CSV export downloaded.");
     window.setTimeout(() => setNotice(""), 2600);
-  }
-
-  function exportPdf() {
-    if (invalidExportRange) {
-      setError("The export start date cannot be after the end date.");
-      return;
-    }
-
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-
-    if (!reportWindow) {
-      setError("Your browser blocked the PDF window. Allow pop-ups and try again.");
-      return;
-    }
-
-    const rangeText =
-      exportFrom || exportTo
-        ? `${exportFrom || "Beginning"} to ${exportTo || "Latest"}`
-        : "All currently filtered transactions";
-
-    const tableRows = exportRows
-      .map((item) => {
-        const direction = directionOf(item.type);
-        const signedAmount =
-          direction === "inflow"
-            ? Number(item.amount_eur ?? item.amount)
-            : direction === "outflow"
-              ? -Number(item.amount_eur ?? item.amount)
-              : Number(item.amount_eur ?? item.amount);
-
-        return `
-          <tr>
-            <td>${htmlCell(readableDateTime(item.occurred_at, item.transaction_date))}</td>
-            <td>
-              <strong>${htmlCell(item.description)}</strong>
-              <span>${htmlCell(item.category)} · ${htmlCell(typeLabel(item.type))}</span>
-            </td>
-            <td>${htmlCell(item.currency || "EUR")}</td>
-            <td class="amount">${htmlCell(formatCurrency(signedAmount, "EUR"))}</td>
-          </tr>
-        `;
-      })
-      .join("");
-
-    reportWindow.document.write(`
-      <!doctype html>
-      <html lang="en">
-        <head>
-          <meta charset="utf-8" />
-          <title>Ficonter transaction export</title>
-          <style>
-            @page { size: A4; margin: 18mm; }
-            * { box-sizing: border-box; }
-            body {
-              margin: 0;
-              color: #202427;
-              font-family: Arial, Helvetica, sans-serif;
-              background: #ffffff;
-            }
-            header {
-              display: flex;
-              justify-content: space-between;
-              gap: 24px;
-              padding-bottom: 18px;
-              margin-bottom: 18px;
-              border-bottom: 1px solid #d9d1c5;
-            }
-            .brand {
-              color: #9f8455;
-              font-family: Georgia, serif;
-              font-size: 22px;
-              font-weight: 700;
-              letter-spacing: .08em;
-            }
-            h1 {
-              margin: 6px 0 4px;
-              font-family: Georgia, serif;
-              font-size: 30px;
-              font-weight: 500;
-            }
-            p { margin: 0; color: #716d67; font-size: 12px; line-height: 1.5; }
-            .meta { text-align: right; }
-            table { width: 100%; border-collapse: collapse; }
-            th {
-              padding: 10px 8px;
-              border-bottom: 1px solid #cfc6b8;
-              color: #716d67;
-              font-size: 10px;
-              letter-spacing: .08em;
-              text-align: left;
-              text-transform: uppercase;
-            }
-            td {
-              padding: 11px 8px;
-              border-bottom: 1px solid #ebe5dc;
-              font-size: 11px;
-              vertical-align: top;
-            }
-            td strong { display: block; font-size: 11px; }
-            td span { display: block; margin-top: 3px; color: #77736d; font-size: 9px; }
-            .amount { white-space: nowrap; text-align: right; font-weight: 700; }
-            footer {
-              margin-top: 18px;
-              color: #77736d;
-              font-size: 9px;
-              text-align: center;
-            }
-          </style>
-        </head>
-        <body>
-          <header>
-            <div>
-              <div class="brand">FICONTER</div>
-              <h1>Transaction report</h1>
-              <p>${htmlCell(rangeText)}</p>
-            </div>
-            <div class="meta">
-              <p><strong>${exportRows.length}</strong> records</p>
-              <p>Generated ${htmlCell(new Date().toLocaleString("en-GB"))}</p>
-            </div>
-          </header>
-
-          <table>
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Transaction</th>
-                <th>Currency</th>
-                <th style="text-align:right">EUR amount</th>
-              </tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-          </table>
-
-          <footer>Ficonter · Your Financial Command Center</footer>
-          <script>
-            window.addEventListener("load", () => {
-              window.focus();
-              window.print();
-            });
-          </script>
-        </body>
-      </html>
-    `);
-
-    reportWindow.document.close();
-    setNotice("PDF report opened. Select “Save as PDF” in the print window.");
-    window.setTimeout(() => setNotice(""), 3600);
   }
 
   function openEdit(transaction: Transaction) {
@@ -597,78 +397,10 @@ export function TransactionLedger({ transactions: initialTransactions }: Props) 
       <div className={styles.toolbarTop}>
         <label className={styles.searchBox}>
           <Search size={17} aria-hidden="true" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search description, category, type or currency"
-            aria-label="Search transactions"
-          />
+          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search description, category, type or currency" aria-label="Search transactions" />
         </label>
-
-        <button
-          className={styles.secondaryAction}
-          type="button"
-          onClick={clearFilters}
-        >
-          <RotateCcw size={16} />
-          Reset
-        </button>
-
-        <div className={styles.exportPanel} aria-label="Export transactions">
-          <label className={styles.exportDateField}>
-            <span>From</span>
-            <div className={styles.exportDateInput}>
-              <CalendarDays size={15} aria-hidden="true" />
-              <input
-                type="date"
-                value={exportFrom}
-                max={exportTo || undefined}
-                onChange={(event) => {
-                  setExportFrom(event.target.value);
-                  setError("");
-                }}
-                aria-label="Export from date"
-              />
-            </div>
-          </label>
-
-          <label className={styles.exportDateField}>
-            <span>To</span>
-            <div className={styles.exportDateInput}>
-              <CalendarDays size={15} aria-hidden="true" />
-              <input
-                type="date"
-                value={exportTo}
-                min={exportFrom || undefined}
-                onChange={(event) => {
-                  setExportTo(event.target.value);
-                  setError("");
-                }}
-                aria-label="Export to date"
-              />
-            </div>
-          </label>
-
-          <button
-            className={styles.exportButton}
-            type="button"
-            onClick={exportCsv}
-            disabled={!exportRows.length || invalidExportRange}
-          >
-            <Download size={16} />
-            CSV
-          </button>
-
-          <button
-            className={`${styles.exportButton} ${styles.pdfButton}`}
-            type="button"
-            onClick={exportPdf}
-            disabled={!exportRows.length || invalidExportRange}
-          >
-            <Download size={16} />
-            PDF
-          </button>
-        </div>
+        <button className={styles.secondaryAction} type="button" onClick={clearFilters}><RotateCcw size={16} /> Reset</button>
+        <button className={styles.exportButton} type="button" onClick={exportCsv} disabled={!visible.length}><Download size={16} /> Export CSV</button>
       </div>
 
       <div className={`${styles.toolbar} ${styles.toolbarFive}`}>
