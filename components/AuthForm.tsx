@@ -17,6 +17,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     setLoading(true);
     setMessage(null);
 
@@ -43,6 +44,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
       if (mode === "register") {
         const redirectTo = `${window.location.origin}/auth/callback`;
+
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -78,6 +80,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
     }
   }
 
+  const recoveryLinkStyle = {
+    color: "var(--gold, #b79b6c)",
+    fontSize: 12,
+    fontWeight: 800,
+  } as const;
+
+  const fieldHeaderStyle = {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    gap: 12,
+  } as const;
+
   return (
     <form
       className="form"
@@ -100,7 +115,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       <div className="field">
-        <label htmlFor="ficonter-username">Email address</label>
+        <div style={fieldHeaderStyle}>
+          <label htmlFor="ficonter-username">Email address</label>
+
+          {mode === "login" ? (
+            <Link
+              href="/recover-account?mode=username"
+              style={recoveryLinkStyle}
+            >
+              Forgot username?
+            </Link>
+          ) : null}
+        </div>
+
         <input
           id="ficonter-username"
           className="input"
@@ -116,28 +143,19 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       </div>
 
       <div className="field">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "baseline",
-            gap: 12,
-          }}
-        >
+        <div style={fieldHeaderStyle}>
           <label htmlFor="ficonter-password">Password</label>
+
           {mode === "login" ? (
             <Link
               href="/recover-account?mode=password"
-              style={{
-                color: "var(--gold, #b79b6c)",
-                fontSize: 12,
-                fontWeight: 800,
-              }}
+              style={recoveryLinkStyle}
             >
               Forgot password?
             </Link>
           ) : null}
         </div>
+
         <input
           id="ficonter-password"
           className="input"
@@ -165,57 +183,36 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       {mode === "login" && (
-        <>
-          <div
+        <label
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            cursor: "pointer",
+            fontSize: 14,
+            lineHeight: 1.45,
+            color: "var(--muted, #756f67)",
+          }}
+        >
+          <input
+            type="checkbox"
+            checked={keepSignedIn}
+            onChange={(event) => setKeepSignedIn(event.target.checked)}
             style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              marginTop: -6,
+              width: 18,
+              height: 18,
+              marginTop: 2,
+              accentColor: "#1f2326",
             }}
-          >
-            <Link
-              href="/recover-account?mode=username"
-              style={{
-                color: "var(--gold, #b79b6c)",
-                fontSize: 12,
-                fontWeight: 800,
-              }}
-            >
-              Forgot username?
-            </Link>
-          </div>
-
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 12,
-              cursor: "pointer",
-              fontSize: 14,
-              lineHeight: 1.45,
-              color: "var(--muted, #756f67)",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={keepSignedIn}
-              onChange={(event) => setKeepSignedIn(event.target.checked)}
-              style={{
-                width: 18,
-                height: 18,
-                marginTop: 2,
-                accentColor: "#1f2326",
-              }}
-            />
-            <span>
-              <strong style={{ color: "var(--ink, #1f2326)" }}>
-                Keep me signed in on this device
-              </strong>
-              <br />
-              Select this only on a personal or trusted computer.
-            </span>
-          </label>
-        </>
+          />
+          <span>
+            <strong style={{ color: "var(--ink, #1f2326)" }}>
+              Keep me signed in on this device
+            </strong>
+            <br />
+            Select this only on a personal or trusted computer.
+          </span>
+        </label>
       )}
 
       {message && (
