@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, BarChart3, LockKeyhole, Sparkles, WalletCards, Target, ReceiptText } from "lucide-react";
 import { Brand } from "@/components/Brand";
 
@@ -11,7 +12,21 @@ const features = [
   [Sparkles, "Luxury simplicity", "A refined, comfortable interface that removes the stress from financial organization."],
 ] as const;
 
-export default function HomePage() {
+export default async function HomePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string }>;
+}) {
+  const params = await searchParams;
+
+  if (params.code) {
+    redirect(
+      `/auth/callback?code=${encodeURIComponent(
+        params.code,
+      )}&next=${encodeURIComponent("/update-password")}`,
+    );
+  }
+
   return (
     <main>
       <div className="container">

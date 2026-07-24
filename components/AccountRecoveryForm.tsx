@@ -27,7 +27,10 @@ export function AccountRecoveryForm({
     event.preventDefault();
     if (loading) return;
 
-    const formData = new FormData(event.currentTarget);
+    // Keep a stable reference before awaiting Supabase. React's currentTarget
+    // is only guaranteed while the submit event is being handled.
+    const formElement = event.currentTarget;
+    const formData = new FormData(formElement);
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
 
     setLoading(true);
@@ -50,7 +53,7 @@ export function AccountRecoveryForm({
         text:
           "If an account uses that email, Ficonter has sent a secure password-reset link.",
       });
-      event.currentTarget.reset();
+      formElement.reset();
     } catch (error) {
       setMessage({
         type: "error",
