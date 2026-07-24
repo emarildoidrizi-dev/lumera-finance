@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { Activity, ArrowUpRight, ShieldCheck } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
 import { TYPE_BY_VALUE, type FlowDirection } from "@/lib/financialOptions";
 import styles from "./FinancialHealthScore.module.css";
 
@@ -88,39 +88,36 @@ export function FinancialHealthScore({ transactions }: Props) {
 
   return (
     <section className={styles.card} aria-label="Financial health score">
-      <div className={styles.header}>
-        <div>
-          <span className={styles.eyebrow}>Financial health</span>
-          <h2>Your financial score</h2>
-        </div>
-        <div className={styles.live}><span />Live</div>
-      </div>
+      <div className={styles.gaugeWrap}>
+        <svg
+          className={styles.gauge}
+          viewBox="0 0 112 112"
+          role="img"
+          aria-label={`Financial health score ${health.score} out of 100`}
+        >
+          <circle className={styles.gaugeTrack} cx="56" cy="56" r="46" />
+          <circle
+            className={styles.gaugeValue}
+            cx="56"
+            cy="56"
+            r="46"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+          />
+        </svg>
 
-      <div className={styles.content}>
-        <div className={styles.gaugeWrap}>
-          <svg className={styles.gauge} viewBox="0 0 112 112" role="img" aria-label={`Financial health score ${health.score} out of 100`}>
-            <circle className={styles.gaugeTrack} cx="56" cy="56" r="46" />
-            <circle className={styles.gaugeValue} cx="56" cy="56" r="46" strokeDasharray={circumference} strokeDashoffset={dashOffset} />
-          </svg>
-          <div className={styles.score}><strong>{health.score}</strong><span>/ 100</span></div>
-        </div>
-
-        <div className={styles.assessment}>
-          <div className={styles.statusRow}><ShieldCheck size={18} /><strong>{health.label}</strong></div>
-          <p>{health.summary}</p>
-          <div className={styles.metrics}>
-            <div><span>Savings rate</span><strong>{(health.savingsRate * 100).toFixed(1)}%</strong></div>
-            <div><span>Net cash flow</span><strong>{new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(health.netCashFlow)}</strong></div>
-          </div>
+        <div className={styles.score}>
+          <strong>{health.score}</strong>
+          <span>/ 100</span>
         </div>
       </div>
 
-      <div className={styles.footer}>
-        <Activity size={15} />
-        <span>Based on recorded income, expenses, savings and cash flow.</span>
-        <ArrowUpRight size={15} />
+      <div className={styles.copy}>
+        <span className={styles.eyebrow}>Financial health</span>
+        <div className={styles.statusRow}>
+          <ShieldCheck size={18} />
+          <strong>{health.label}</strong>
+        </div>
       </div>
-      <p className={styles.disclaimer}>This is a Ficonter planning indicator, not a credit score or financial advice.</p>
     </section>
-  );
-}
+  );}
