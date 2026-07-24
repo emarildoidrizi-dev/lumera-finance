@@ -197,7 +197,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <p className="center muted">
         {mode === "login" ? (
           <>
-            New to Lumera?{" "}
+            New to Ficonter?{" "}
             <Link href="/register">
               <strong>Create an account</strong>
             </Link>

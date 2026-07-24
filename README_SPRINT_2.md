@@ -1,4 +1,4 @@
-# Lumera Finance — Sprint 2
+# Ficonter — Sprint 2
 
 Sprint 2 upgrades the Transactions module without changing the existing Supabase schema.
 

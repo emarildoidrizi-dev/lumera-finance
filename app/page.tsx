@@ -29,7 +29,7 @@ export default function HomePage() {
           <div>
             <div className="eyebrow">Private wealth, made clear</div>
             <h1>Your private financial command center.</h1>
-            <p className="lead">Lumera brings your financial life into one elegant, secure place—so you can understand today and shape tomorrow with confidence.</p>
+            <p className="lead">Ficonter brings your financial life into one elegant, secure place—so you can understand today and shape tomorrow with confidence.</p>
             <div className="hero-actions">
               <Link className="btn btn-primary" href="/register">Start free <ArrowRight size={18}/></Link>
               <Link className="btn btn-soft" href="/login">Log in</Link>
@@ -51,9 +51,9 @@ export default function HomePage() {
 
       <section id="features" className="section">
         <div className="container">
-          <div className="eyebrow">The Lumera system</div>
+          <div className="eyebrow">The Ficonter system</div>
           <h2>Everything important. Nothing overwhelming.</h2>
-          <p className="section-copy">Lumera is designed as a financial operating system for individuals and households who value clarity, privacy and a composed experience.</p>
+          <p className="section-copy">Ficonter is designed as a financial operating system for individuals and households who value clarity, privacy and a composed experience.</p>
           <div className="cards">
             {features.map(([Icon,title,copy]) => (
               <article className="card" key={title}>
@@ -71,7 +71,7 @@ export default function HomePage() {
             <div className="eyebrow">Privacy as a foundation</div>
             <h2>Your financial data belongs to you.</h2>
           </div>
-          <p style={{color:"#cbc6bd",lineHeight:1.8,fontSize:18}}>Lumera uses authenticated accounts and database-level access policies so users can access only their own financial records. We are building without advertising and without selling financial data.</p>
+          <p style={{color:"#cbc6bd",lineHeight:1.8,fontSize:18}}>Ficonter uses authenticated accounts and database-level access policies so users can access only their own financial records. We are building without advertising and without selling financial data.</p>
         </div>
       </section>
 
@@ -80,7 +80,7 @@ export default function HomePage() {
           <div className="eyebrow">Begin with clarity</div>
           <h2>Build a more intentional financial life.</h2>
           <p className="section-copy" style={{margin:"0 auto 28px"}}>Create your private workspace and begin organizing your finances in minutes.</p>
-          <Link className="btn btn-gold" href="/register">Create your Lumera account</Link>
+          <Link className="btn btn-gold" href="/register">Create your Ficonter account</Link>
         </div>
       </section>
     </main>

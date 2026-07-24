@@ -31,7 +31,7 @@ export default function DashboardLoading() {
           <div className={`${styles.block} ${styles.chart}`} />
         </div>
       </div>
-      <span className={styles.srOnly}>Lumera is opening the selected section.</span>
+      <span className={styles.srOnly}>Ficonter is opening the selected section.</span>
     </div>
   );
 }

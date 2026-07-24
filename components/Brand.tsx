@@ -4,7 +4,7 @@ export function Brand({ href = "/" }: { href?: string }) {
   return (
     <Link className="brand" href={href}>
       <span className="brand-mark" aria-hidden="true" />
-      <span>Lumera Finance</span>
+      <span>Ficonter</span>
     </Link>
   );
 }

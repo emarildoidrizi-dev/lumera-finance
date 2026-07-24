@@ -1,8 +1,8 @@
-# Lumera Finance
+# Ficonter
 
 **Your private financial command center.**
 
-This is the real GitHub/Vercel-ready Lumera Finance foundation.
+This is the real GitHub/Vercel-ready Ficonter foundation.
 
 ## Included now
 
@@ -18,7 +18,7 @@ This is the real GitHub/Vercel-ready Lumera Finance foundation.
 
 ## 1. Upload this project to GitHub
 
-Upload **all files and folders inside this project** to the root of your `lumera-finance` repository.
+Upload **all files and folders inside this project** to the root of your `ficonter` repository.
 
 ## 2. Configure Supabase
 
@@ -58,7 +58,7 @@ On Vercel, add the same variables under **Project Settings -> Environment Variab
 ## 5. Deploy with Vercel
 
 1. In Vercel click **Add New -> Project**.
-2. Import the GitHub repository `lumera-finance`.
+2. Import the GitHub repository `ficonter`.
 3. Vercel will detect Next.js automatically.
 4. Add the three environment variables.
 5. Click **Deploy**.

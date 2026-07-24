@@ -1,2 +1,2 @@
 import { NextResponse } from "next/server";
-export function GET(){return NextResponse.json({status:"ok",service:"lumera-finance"});}
+export function GET(){return NextResponse.json({status:"ok",service:"ficonter"});}

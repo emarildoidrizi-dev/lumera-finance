@@ -1,4 +1,4 @@
--- Lumera Finance — Simplify Transaction Types
+-- Ficonter — Simplify Transaction Types
 -- Converts every existing transaction to either "income" or "expense"
 -- and restricts future records to those two values.
 

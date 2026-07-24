@@ -1,4 +1,4 @@
--- Lumera Finance — Transaction Options & Multi-Currency Migration
+-- Ficonter — Transaction Options & Multi-Currency Migration
 -- Run once in Supabase SQL Editor before deploying this UI update.
 
 alter table public.transactions
