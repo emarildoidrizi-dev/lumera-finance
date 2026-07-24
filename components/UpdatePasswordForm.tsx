@@ -40,6 +40,7 @@ export function UpdatePasswordForm() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
+
       if (event === "PASSWORD_RECOVERY" || session) {
         setReady(true);
         setMessage(null);
@@ -54,11 +55,14 @@ export function UpdatePasswordForm() {
 
   async function updatePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
     if (!ready || loading) return;
 
     const formData = new FormData(event.currentTarget);
     const password = String(formData.get("password") ?? "");
-    const confirmPassword = String(formData.get("confirmPassword") ?? "");
+    const confirmPassword = String(
+      formData.get("confirmPassword") ?? "",
+    );
 
     if (password.length < 8) {
       setMessage({
@@ -69,7 +73,10 @@ export function UpdatePasswordForm() {
     }
 
     if (password !== confirmPassword) {
-      setMessage({ type: "error", text: "The passwords do not match." });
+      setMessage({
+        type: "error",
+        text: "The passwords do not match.",
+      });
       return;
     }
 
@@ -77,17 +84,25 @@ export function UpdatePasswordForm() {
     setMessage(null);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      const { error: updateError } = await supabase.auth.updateUser({
+        password,
+      });
 
-      setComplete(true);
+      if (updateError) {
+        throw updateError;
+      }
+
+      const { error: signOutError } = await supabase.auth.signOut();
+
+      if (signOutError) {
+        throw signOutError;
+      }
+
       setMessage({
         type: "success",
         text: "Your Ficonter password has been changed successfully.",
       });
-
-      await supabase.auth.signOut();
-      event.currentTarget.reset();
+      setComplete(true);
     } catch (error) {
       setMessage({
         type: "error",
