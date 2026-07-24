@@ -1,8 +1,29 @@
+import Image from "next/image";
 import styles from "./loading.module.css";
 
 export default function DashboardLoading() {
   return (
-    <div className={styles.page} role="status" aria-live="polite" aria-label="Opening page">
+    <div
+      className={styles.page}
+      role="status"
+      aria-live="polite"
+      aria-label="Opening page"
+    >
+      <div className={styles.loadingBrand}>
+        <Image
+          src="/ficonter-mark.svg"
+          alt=""
+          width={48}
+          height={48}
+          priority
+          aria-hidden="true"
+        />
+        <div>
+          <strong>Ficonter</strong>
+          <span>Opening your financial command center</span>
+        </div>
+      </div>
+
       <div className={styles.titleRow}>
         <div className={`${styles.block} ${styles.heading}`} />
         <div className={`${styles.block} ${styles.action}`} />
@@ -31,7 +52,9 @@ export default function DashboardLoading() {
           <div className={`${styles.block} ${styles.chart}`} />
         </div>
       </div>
-      <span className={styles.srOnly}>Ficonter is opening the selected section.</span>
+      <span className={styles.srOnly}>
+        Ficonter is opening the selected section.
+      </span>
     </div>
   );
 }
