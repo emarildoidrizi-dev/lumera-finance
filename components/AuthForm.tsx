@@ -100,9 +100,9 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       <div className="field">
-        <label htmlFor="lumera-username">Email address</label>
+        <label htmlFor="ficonter-username">Email address</label>
         <input
-          id="lumera-username"
+          id="ficonter-username"
           className="input"
           name="username"
           type="email"
@@ -116,9 +116,30 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       </div>
 
       <div className="field">
-        <label htmlFor="lumera-password">Password</label>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            gap: 12,
+          }}
+        >
+          <label htmlFor="ficonter-password">Password</label>
+          {mode === "login" ? (
+            <Link
+              href="/recover-account?mode=password"
+              style={{
+                color: "var(--gold, #b79b6c)",
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              Forgot password?
+            </Link>
+          ) : null}
+        </div>
         <input
-          id="lumera-password"
+          id="ficonter-password"
           className="input"
           name="password"
           type="password"
@@ -144,36 +165,57 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       )}
 
       {mode === "login" && (
-        <label
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            cursor: "pointer",
-            fontSize: 14,
-            lineHeight: 1.45,
-            color: "var(--muted, #756f67)",
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={keepSignedIn}
-            onChange={(event) => setKeepSignedIn(event.target.checked)}
+        <>
+          <div
             style={{
-              width: 18,
-              height: 18,
-              marginTop: 2,
-              accentColor: "#1f2326",
+              display: "flex",
+              justifyContent: "flex-end",
+              marginTop: -6,
             }}
-          />
-          <span>
-            <strong style={{ color: "var(--ink, #1f2326)" }}>
-              Keep me signed in on this device
-            </strong>
-            <br />
-            Select this only on a personal or trusted computer.
-          </span>
-        </label>
+          >
+            <Link
+              href="/recover-account?mode=username"
+              style={{
+                color: "var(--gold, #b79b6c)",
+                fontSize: 12,
+                fontWeight: 800,
+              }}
+            >
+              Forgot username?
+            </Link>
+          </div>
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: 12,
+              cursor: "pointer",
+              fontSize: 14,
+              lineHeight: 1.45,
+              color: "var(--muted, #756f67)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={keepSignedIn}
+              onChange={(event) => setKeepSignedIn(event.target.checked)}
+              style={{
+                width: 18,
+                height: 18,
+                marginTop: 2,
+                accentColor: "#1f2326",
+              }}
+            />
+            <span>
+              <strong style={{ color: "var(--ink, #1f2326)" }}>
+                Keep me signed in on this device
+              </strong>
+              <br />
+              Select this only on a personal or trusted computer.
+            </span>
+          </label>
+        </>
       )}
 
       {message && (
